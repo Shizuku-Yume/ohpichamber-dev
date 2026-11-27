@@ -1,14 +1,15 @@
+import { z } from 'zod';
 import { credentialAccessToken } from './selected-credential.js';
+import type { CredentialJson, ZenmuxCredential } from '../credentials/contracts.js';
+import type { ProviderUsage, QuotaResult } from '../utils/contracts.js';
 import {
   buildResult,
   toUsageWindow,
   toNumber,
   formatMoney,
   asObject,
-  asNonEmptyString
+  asNonEmptyString,
 } from '../utils/index.js';
-import { z } from "zod";
-
 
 interface ZenmuxFields {
   data?: unknown;
@@ -28,14 +29,19 @@ export const providerName = 'ZenMux';
 
 const ZENMUX_BALANCE_URL = 'https://zenmux.ai/api/v1/management/payg/balance';
 
-const getPlatformApiKey = (credential) => credentialAccessToken(credential);
+const getPlatformApiKey = (credential?: CredentialJson): string | null => credentialAccessToken(credential);
 
 const parseCredits = z.unknown().transform((value) => toNumber(asNonEmptyString(value)
   ?? (Number.isFinite(value) ? value : null))).parse;
 
-export const isConfigured = (credential) => Boolean(getPlatformApiKey(credential));
+export const isConfigured = (credential?: CredentialJson): boolean => Boolean(getPlatformApiKey(credential));
 
-export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
+export interface ZenmuxFetchOptions {
+  credential?: CredentialJson | undefined;
+  fetchImpl?: typeof fetch | undefined;
+}
+
+export const fetchQuota = async ({ credential, fetchImpl = fetch }: ZenmuxFetchOptions = {}): Promise<QuotaResult<string, string, ProviderUsage>> => {
   const apiKey = getPlatformApiKey(credential);
 
   if (!apiKey) {

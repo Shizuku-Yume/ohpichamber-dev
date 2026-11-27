@@ -302,9 +302,6 @@ export const createProjectContextRuntime = (deps: ProjectContextDependencies) =>
     if (!value) {
       throw new Error('projectId is required');
     }
-    // `.` and `..` pass the character class but are not ids: joined into a
-    // storage path they climb out of the projects directory. Checked after the
-    // trim, because ` .. ` trims to the same stem.
     if (value === '.' || value === '..') {
       throw new Error('Invalid project id');
     }
@@ -343,7 +340,7 @@ export const createProjectContextRuntime = (deps: ProjectContextDependencies) =>
       await fsPromises.writeFile(temporaryPath, JSON.stringify(value, null, 2), 'utf8');
       await fsPromises.rename(temporaryPath, filePath);
     } catch (error) {
-      await fsPromises.rm(temporaryPath, { force: true }).catch(() => {});
+      await fsPromises.rm(temporaryPath, { force: true }).catch(() => { });
       throw error;
     }
   };
@@ -351,7 +348,7 @@ export const createProjectContextRuntime = (deps: ProjectContextDependencies) =>
   const withWriteLock = async <T>(projectId: string, mutate: () => Promise<T>): Promise<T> => {
     const key = sanitizeProjectId(projectId);
     const previous = writeLocks.get(key) || Promise.resolve();
-    let release = () => {};
+    let release = () => { };
     const next = new Promise<void>((resolve) => { release = resolve; });
     const chained = previous.finally(() => next);
     writeLocks.set(key, chained);

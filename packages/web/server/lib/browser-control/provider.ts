@@ -21,7 +21,7 @@ export interface BrowserProviderGuest extends Omit<OpenChamberContributes, 'pane
   id: string;
   name: string;
   packageRoot: string;
-  enabled?: boolean;
+  enabled?: boolean | undefined;
   capabilityGrants: GuestCapability[];
 }
 

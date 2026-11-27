@@ -1,7 +1,73 @@
+import type * as nodeCrypto from 'node:crypto';
+import type { Server } from 'node:http';
+import type * as nodePath from 'node:path';
+import type { Duplex } from 'node:stream';
+import type { createDictationRuntime as CreateDictationRuntime, DictationRuntimeDependencies } from '../dictation/runtime.js';
 import { recordStartupPerformance } from '../diagnostics/startup-performance.js';
+import type { createEnvironmentRuntime } from '../environment/runtime.js';
+import type { createMessageStreamWsRuntime as CreateMessageStreamWsRuntime } from '../event-stream/index.js';
+import type { GlobalMessageStreamHub } from '../event-stream/global-hub.js';
+import type { StreamSocket } from '../event-stream/contracts.js';
 import { isExecutable } from '../host/executable.js';
+import type { RequestOriginChecker } from '../security/request-security.js';
+import type { Application, ExpressFactory } from '../shared/http-contracts.js';
+import type { createTerminalRuntime as CreateTerminalRuntime, TerminalRuntimeOptions } from '../terminal/runtime.js';
+import type { createTunnelAuth } from '../tunnels/tunnel-auth.js';
+import type { TunnelRoutesDependencies } from '../tunnels/routes.js';
+import type { createUiAuth } from '../ui-auth/ui-auth.js';
+import type { createServerStartupRuntime as CreateServerStartupRuntime, ListenOptions, ServerStartupDependencies } from './server-startup-runtime.js';
+import type { createStaticRoutesRuntime } from './static-routes-runtime.js';
 
-export const createStartupPipelineRuntime = (dependencies) => {
+export interface StartupPipelineDependencies {
+  createTerminalRuntime: typeof CreateTerminalRuntime;
+  createDictationRuntime: typeof CreateDictationRuntime;
+  createMessageStreamWsRuntime: typeof CreateMessageStreamWsRuntime;
+  createServerStartupRuntime: typeof CreateServerStartupRuntime;
+}
+
+export interface StartupPipelineOptions {
+  app: Application;
+  server: Server;
+  express: ExpressFactory;
+  fs: TerminalRuntimeOptions['fs'];
+  path: Pick<typeof nodePath, 'join' | 'resolve'>;
+  uiAuthController?: ReturnType<typeof createUiAuth> | null;
+  tunnelAuthController: ReturnType<typeof createTunnelAuth>;
+  buildAugmentedPath: () => string;
+  searchPathFor: TerminalRuntimeOptions['searchPathFor'];
+  isRequestOriginAllowed: RequestOriginChecker;
+  rejectWebSocketUpgrade: (socket: Duplex, statusCode: number, reason: string) => void;
+  globalEventHub: GlobalMessageStreamHub;
+  messageStreamWsClients: Set<StreamSocket>;
+  terminalHeartbeatIntervalMs: number;
+  environmentRuntime?: ReturnType<typeof createEnvironmentRuntime> | null;
+  startAgentService: () => void | Promise<void>;
+  onListenerReady?: (() => void | Promise<void>) | null;
+  staticRoutesRuntime: ReturnType<typeof createStaticRoutesRuntime>;
+  process: ServerStartupDependencies['process'];
+  crypto: typeof nodeCrypto;
+  normalizeTunnelBootstrapTtlMs: TunnelRoutesDependencies['normalizeTunnelBootstrapTtlMs'];
+  readSettingsFromDiskMigrated: TunnelRoutesDependencies['readSettingsFromDiskMigrated'];
+  startTunnelWithNormalizedRequest: ServerStartupDependencies['startTunnelWithNormalizedRequest'];
+  gracefulShutdown: ServerStartupDependencies['gracefulShutdown'];
+  getSignalsAttached: ServerStartupDependencies['getSignalsAttached'];
+  setSignalsAttached: ServerStartupDependencies['setSignalsAttached'];
+  syncToHmrState: ServerStartupDependencies['syncToHmrState'];
+  TUNNEL_MODE_QUICK: string;
+  TUNNEL_MODE_MANAGED_LOCAL: string;
+  TUNNEL_MODE_MANAGED_REMOTE: string;
+  host: string | undefined;
+  port: number;
+  startupTunnelRequest: ListenOptions['startupTunnelRequest'];
+  onTunnelReady: ListenOptions['onTunnelReady'];
+  tunnelRuntimeContext: { setActivePort: (port: number) => void };
+  attachSignals: boolean;
+  apiOnly: boolean;
+  dictationModelsDir: DictationRuntimeDependencies['modelsDir'];
+  broadcastUiEvent?: TerminalRuntimeOptions['broadcastUiEvent'];
+}
+
+export const createStartupPipelineRuntime = (dependencies: StartupPipelineDependencies) => {
   const {
     createTerminalRuntime,
     createDictationRuntime,
@@ -9,7 +75,7 @@ export const createStartupPipelineRuntime = (dependencies) => {
     createServerStartupRuntime,
   } = dependencies;
 
-  const run = async (options) => {
+  const run = async (options: StartupPipelineOptions) => {
     const pipelineStartedAt = performance.now();
     recordStartupPerformance('web.pipeline.start');
     const {
@@ -26,8 +92,6 @@ export const createStartupPipelineRuntime = (dependencies) => {
       globalEventHub,
       messageStreamWsClients,
       terminalHeartbeatIntervalMs,
-      terminalRebindWindowMs,
-      terminalMaxRebindsPerWindow,
       environmentRuntime = null,
       startAgentService,
       onListenerReady = null,
@@ -59,7 +123,6 @@ export const createStartupPipelineRuntime = (dependencies) => {
     const terminalRuntime = createTerminalRuntime({
       app,
       server,
-      express,
       fs,
       path,
       uiAuthController,
@@ -70,11 +133,7 @@ export const createStartupPipelineRuntime = (dependencies) => {
       isRequestOriginAllowed,
       rejectWebSocketUpgrade,
       TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS: terminalHeartbeatIntervalMs,
-      TERMINAL_INPUT_WS_REBIND_WINDOW_MS: terminalRebindWindowMs,
-      TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW: terminalMaxRebindsPerWindow,
       environmentRuntime,
-      // Session create/close/kill is authoritative on the Host, so the UI
-      // hears about it instead of rediscovering terminals on the next focus.
       broadcastUiEvent,
     });
 
@@ -87,7 +146,6 @@ export const createStartupPipelineRuntime = (dependencies) => {
       rejectWebSocketUpgrade,
       modelsDir: dictationModelsDir,
     });
-
     const messageStreamRuntime = createMessageStreamWsRuntime({
       server,
       uiAuthController,
@@ -96,7 +154,6 @@ export const createStartupPipelineRuntime = (dependencies) => {
       globalEventHub,
       wsClients: messageStreamWsClients,
     });
-
 
     if (apiOnly) {
       staticRoutesRuntime.registerApiOnlyFallbackRoutes(app);

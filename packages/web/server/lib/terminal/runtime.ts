@@ -59,7 +59,7 @@ export interface TerminalRuntimeOptions extends Pick<TerminalShellResolverOption
   server: Pick<Server, 'on' | 'off'>;
   fs: { promises: TerminalShellResolverOptions['fs']['promises'] & { stat(cwd: string): Promise<Pick<Stats, 'isDirectory'>> } };
   path: Pick<typeof nodePath, 'join' | 'resolve'>;
-  uiAuthController?: Pick<ReturnType<typeof createUiAuth>, 'enabled' | 'ensureSessionToken'> | null;
+  uiAuthController?: Pick<ReturnType<typeof createUiAuth>, 'enabled' | 'ensureSessionToken'> | null | undefined;
   tunnelAuthController?: Pick<ReturnType<typeof createTunnelAuth>, 'classifyRequestScope' | 'getActiveTunnelOrigin' | 'getTunnelSessionFromRequest' | 'bindTunnelSession'>;
   buildAugmentedPath: () => string;
   isRequestOriginAllowed: RequestOriginChecker;
@@ -69,7 +69,7 @@ export interface TerminalRuntimeOptions extends Pick<TerminalShellResolverOption
   terminalTerminationGraceMs?: number;
   shutdownProcesses?: typeof shutdownTerminalProcesses;
   environmentRuntime?: Pick<ReturnType<typeof createEnvironmentRuntime>, 'applyToDirectory'> | null;
-  broadcastUiEvent?: (event: { type: 'openchamber:terminal-sessions-changed'; properties: object }) => void;
+  broadcastUiEvent?: ((event: { type: 'openchamber:terminal-sessions-changed'; properties: object }) => void) | undefined;
   logger?: { warn?: typeof console.warn };
 }
 
@@ -119,6 +119,8 @@ interface TerminalHistory {
   original: string[] | null;
   originalTail: string;
   originalLast: string | undefined;
+  units: number;
+  sizes: { offset: number; cols: number; rows: number }[];
 }
 
 type PtyEvent = ({ type: 'output'; data: string } | ({ type: 'exit'; signal: PtyExit['signal'] } & Pick<PtyExit, 'exitCode'>)) & { process: TerminalPty };
@@ -192,7 +194,7 @@ const pendingCreatePromise = ({ promise }: PendingCreate) => {
   return promise;
 };
 
-type TerminalEvent = { t: 'output'; d: string; r?: string } | { t: 'exit'; exitCode: number | null; signal: number | null } | { t: 'restarted'; history: string };
+type TerminalEvent = { t: 'output'; d: string; r?: string } | { t: 'exit'; exitCode: number | null; signal: number | null } | { t: 'restarted'; history: string; cols: number; rows: number } | { t: 'resize'; cols: number; rows: number };
 type PublishedEvent = TerminalEvent & { v: number; s: string; q: number };
 interface Attachment { initializing: boolean; pending: PublishedEvent[] }
 interface Connection { socket: WebSocket; attachments: Map<string, Attachment> }
@@ -281,31 +283,31 @@ const findPendingActionCreate = (pendingSessionCreates: Map<string, PendingCreat
   }
   return null;
 };
-const newHistory = (cols, rows) => ({
+const newHistory = (cols: number, rows: number): TerminalHistory => ({
   chunks: [], head: 0, offset: 0, bytes: 0, original: [], originalTail: '', originalLast: '',
   units: 0, sizes: [{ offset: 0, cols, rows }],
 });
-const historyText = (history) => history.original
+const historyText = (history: TerminalHistory) => history.original
   ? history.original.join('') + history.originalTail
   : Buffer.concat(history.chunks.slice(history.head).map((chunk, index) => chunk.buffer.subarray(index === 0 ? history.offset : 0, chunk.length))).toString('utf8');
-const recordHistoryResize = (history, cols, rows) => {
+const recordHistoryResize = (history: TerminalHistory, cols: number, rows: number) => {
   const offset = history.units;
   const sizes = history.sizes;
-  if (sizes.at(-1).offset === offset) sizes.pop();
+  if (sizes.at(-1)?.offset === offset) sizes.pop();
   sizes.push({ offset, cols, rows });
   if (sizes.length > MAX_HISTORY_RESIZES) sizes.shift();
 };
-const snapshotHistory = (history) => {
+const snapshotHistory = (history: TerminalHistory) => {
   let text = historyText(history);
   const retainedStart = history.units - text.length;
-  const start = Math.max(retainedStart, history.sizes[0].offset);
+  const start = Math.max(retainedStart, history.sizes[0]?.offset ?? 0);
   if (start > retainedStart) text = text.slice(start - retainedStart);
   const nextSize = history.sizes.findIndex((size) => size.offset > start);
   const sizes = history.sizes.slice(nextSize < 0 ? -1 : nextSize - 1)
     .map((size) => ({ ...size, offset: Math.max(0, size.offset - start) }));
   return sizes.length > 1 ? { history: text, sizes } : { history: text };
 };
-const appendHistoryBytes = (history, bytes) => {
+const appendHistoryBytes = (history: TerminalHistory, bytes: Buffer) => {
   let offset = 0;
   while (offset < bytes.length) {
     let tail = history.chunks.at(-1);
@@ -347,8 +349,6 @@ const appendOriginal = (history: TerminalHistory, original: string[], text: stri
 const appendHistory = (history: TerminalHistory, text: string) => {
   if (!text) return;
   history.units += text.length;
-  // Buffer.from encodes an unmatched high surrogate as U+FFFD. Until the first
-  // trim, the next chunk can still complete that UTF-16 pair.
   let encoded = text;
   if (history.original && /[\uD800-\uDBFF]/.test(String(history.originalLast)) && /^[\uDC00-\uDFFF]/.test(text)) {
     removeHistoryTail(history, 3);
@@ -415,7 +415,7 @@ export function createTerminalRuntime({
   isRequestOriginAllowed, rejectWebSocketUpgrade, TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS,
   loadPtyProvider, terminalTerminationGraceMs = TERMINATION_GRACE_MS, shutdownProcesses = shutdownTerminalProcesses,
   environmentRuntime = null,
-  broadcastUiEvent = () => {},
+  broadcastUiEvent = () => { },
   logger = console,
 }: TerminalRuntimeOptions) {
   const sessions = new Map<string, TerminalSession>();
@@ -537,13 +537,13 @@ export function createTerminalRuntime({
     }
   };
 
-  const snapshot = (session) => ({
+  const snapshot = (session: TerminalSession) => ({
     t: 'snapshot', v: 3, s: session.id, q: session.sequence, ...snapshotHistory(session.history),
     cols: session.cols, rows: session.rows,
     status: session.status, exitCode: session.exitCode, signal: session.signal,
     mode: session.mode ?? INTERACTIVE_TERMINAL_MODE, purpose: getSessionPurpose(session),
     runtime, ptyBackend: session.backend,
-  });
+  } satisfies TerminalWsJsonObject);
 
   const publish = (session: TerminalSession, event: TerminalEvent) => {
     session.sequence += 1;
@@ -757,7 +757,7 @@ export function createTerminalRuntime({
       }
     });
     const cleanup = () => { clearInterval(heartbeat); connection.attachments.clear(); connections.delete(connection); };
-    socket.on('close', cleanup); socket.on('error', () => {});
+    socket.on('close', cleanup); socket.on('error', () => { });
   });
 
   const upgradeHandler = createTerminalSocketUpgradeHandler({
@@ -880,7 +880,7 @@ export function createTerminalRuntime({
       }
       res.json({ success: true, cols: session.cols, rows: session.rows, orderedResize: true });
     }
-    catch (error) { res.status(500).json({ error: error?.message || 'Failed to resize terminal' }); }
+    catch (error) { res.status(500).json({ error: (hasErrorFields(error) && error.message) || 'Failed to resize terminal' }); }
   });
   app.post('/api/terminal/:sessionId/appearance', (req, res) => {
     const session = req.params.sessionId === undefined ? undefined : sessions.get(req.params.sessionId);
@@ -902,7 +902,7 @@ export function createTerminalRuntime({
     const shell = body?.shell ?? 'auto';
     const loginShell = body?.loginShell ?? false;
     const previousRestart = pendingSessionRestarts.get(session.id) ?? Promise.resolve();
-    const restart = previousRestart.catch(() => {}).then(async () => {
+    const restart = previousRestart.catch(() => { }).then(async () => {
       const cwd = await validateCwd({ cwd: requestedCwd });
       if (shutdownPromise || sessions.get(session.id) !== session) throw new Error('Terminal session was closed during restart');
       if (!validateSize(cols, 1000) || !validateSize(rows, 500)) throw new Error('Invalid terminal dimensions');

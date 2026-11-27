@@ -8,7 +8,7 @@ import type { GuestBlockContribution } from 'ohpichamber-sdk';
 import type { GuestRecord } from './contracts.js';
 
 
-const isActive = (guest) => guest.enabled !== false
+const isActive = (guest: GuestRecord) => guest.enabled !== false
   && isGuestApproved({ requested: requestedGuestCapabilities(guest), granted: guest.capabilityGrants ?? [] });
 
 const blockSignature = (block: GuestBlockContribution) => `${block.name}(${block.args.map((arg) => `${arg}: string`).join(', ')})`;
@@ -36,7 +36,7 @@ type AgentContextOptions = {
   fsPromises?: Pick<typeof fs, 'realpath' | 'stat' | 'readFile'>;
 };
 
-export const createGuestAgentContext = ({ listGuests, instructions, fsPromises = fs }: AgentContextOptions) => {
+export const createGuestAgentContext = ({ listGuests, instructions }: AgentContextOptions) => {
   const instructionText = async (directory: string | null) => {
     let guests;
     try {

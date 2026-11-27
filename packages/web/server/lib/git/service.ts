@@ -40,7 +40,7 @@ import { randomUUID } from 'crypto';
 
 import { worktreeBootstrapFailureMessage } from './worktree-bootstrap-storage.js';
 
-import type { SimpleGit, BranchSummary, FileStatusResult, RemoteWithRefs } from 'simple-git';
+import type { SimpleGit, BranchSummary, FileStatusResult, RemoteWithRefs, CommitResult as SimpleGitCommitResult } from 'simple-git';
 
 import type { ChildProcess } from 'node:child_process';
 
@@ -55,8 +55,9 @@ import type {
   RepositoryGitContext, GitFileContext, DiffStats, WorktreeTopologyEntry, WorktreeTopologyEvent,
   StartCommandResult, StartCommandOptions, BranchStart, SnapshotOptions, LogOptions,
   HunkAction, PathDiffResult, CommitFile, PostCheckoutHookAction, RepositoryGitPaths, ErrorFields,
+  WorktreeLeaseControl, WorktreeArchiveCapturedOwner, WorktreeArchiveBoundOwner, WorktreeArchiveSessionService, RestoreFingerprint,
 } from './service-contracts.js';
-
+import type { ContributorProvenance } from './contributor-provenance-storage.js';
 export type { RepositoryGitPaths } from './service-contracts.js';
 
 const fsp = fs.promises;
@@ -447,38 +448,40 @@ export const configureGitEnvironment = (runtime: GitEnvironment | null) => {
   gitEnvironment = runtime;
 };
 
-let projectWorktreeDirectoryReader = null;
+let projectWorktreeDirectoryReader: ((projectConfigId: string) => Promise<string | null | undefined>) | null = null;
 
-export const configureProjectWorktreeDirectory = (reader) => {
- projectWorktreeDirectoryReader = typeof reader === 'function' ? reader : null;
+export const configureProjectWorktreeDirectory = (
+  reader: ((projectConfigId: string) => Promise<string | null | undefined>) | null,
+) => {
+  projectWorktreeDirectoryReader = reader instanceof Function ? reader : null;
 };
 
-const SIMPLE_GIT_REFUSED_ENV_CATEGORIES = {
- editor: 'allowUnsafeEditor',
- git_askpass: 'allowUnsafeAskPass',
- git_config: 'allowUnsafeConfigPaths',
- git_config_count: 'allowUnsafeConfigEnvCount',
- git_config_global: 'allowUnsafeConfigPaths',
- git_config_parameters: 'allowUnsafeConfigEnvCount',
- git_config_system: 'allowUnsafeConfigPaths',
- git_editor: 'allowUnsafeEditor',
- git_exec_path: 'allowUnsafeExec',
- git_external_diff: 'allowUnsafeDiffExternal',
- git_pager: 'allowUnsafePager',
- git_proxy_command: 'allowUnsafeGitProxy',
- git_sequence_editor: 'allowUnsafeEditor',
- git_ssh: 'allowUnsafeSshCommand',
- git_ssh_command: 'allowUnsafeSshCommand',
- git_template_dir: 'allowUnsafeTemplateDir',
- pager: 'allowUnsafePager',
- prefix: 'allowUnsafeConfigPaths',
- ssh_askpass: 'allowUnsafeAskPass',
- visual: 'allowUnsafeEditor',
-};
+const SIMPLE_GIT_REFUSED_ENV_CATEGORIES = new Map<string, keyof GitUnsafeOptions>([
+  ['editor', 'allowUnsafeEditor'],
+  ['git_askpass', 'allowUnsafeAskPass'],
+  ['git_config', 'allowUnsafeConfigPaths'],
+  ['git_config_count', 'allowUnsafeConfigEnvCount'],
+  ['git_config_global', 'allowUnsafeConfigPaths'],
+  ['git_config_parameters', 'allowUnsafeConfigEnvCount'],
+  ['git_config_system', 'allowUnsafeConfigPaths'],
+  ['git_editor', 'allowUnsafeEditor'],
+  ['git_exec_path', 'allowUnsafeExec'],
+  ['git_external_diff', 'allowUnsafeDiffExternal'],
+  ['git_pager', 'allowUnsafePager'],
+  ['git_proxy_command', 'allowUnsafeGitProxy'],
+  ['git_sequence_editor', 'allowUnsafeEditor'],
+  ['git_ssh', 'allowUnsafeSshCommand'],
+  ['git_ssh_command', 'allowUnsafeSshCommand'],
+  ['git_template_dir', 'allowUnsafeTemplateDir'],
+  ['pager', 'allowUnsafePager'],
+  ['prefix', 'allowUnsafeConfigPaths'],
+  ['ssh_askpass', 'allowUnsafeAskPass'],
+  ['visual', 'allowUnsafeEditor'],
+]);
 
-const isRefusedBySimpleGit = (name) => {
- const lower = name.toLowerCase();
- return Object.hasOwn(SIMPLE_GIT_REFUSED_ENV_CATEGORIES, lower) || lower.startsWith('git_config_key_') || lower.startsWith('git_config_value_');
+const isRefusedBySimpleGit = (name: string) => {
+  const lower = name.toLowerCase();
+  return SIMPLE_GIT_REFUSED_ENV_CATEGORIES.has(lower) || lower.startsWith('git_config_key_') || lower.startsWith('git_config_value_');
 };
 
 const REPOSITORY_LOCATION_ENV_NAMES = new Set([
@@ -495,44 +498,35 @@ const directoryEnvironmentForGit = async (directory: string) => {
   return Object.fromEntries(Object.entries(variables).filter(([name]) => !isKeptOutOfGitOverlay(name)));
 };
 
-const buildGitEnv = async (directory) => {
- // Git runs the user's hooks, so they must not see what the AppImage launcher
- // added to LD_LIBRARY_PATH and friends (#4177).
- const inherited = stripAppImageLauncherEnv({ ...process.env });
- // Hooks and credential helpers run with the project's tools on PATH.
- const variables = await directoryEnvironmentForGit(directory);
- const env = variables ? overlayEnvironment(inherited, variables) : inherited;
- // Git diagnostics and simple-git's conflict parser require stable messages.
- env.LC_ALL = 'C';
- if (process.platform === 'win32') {
-  // Node already passes an argument array. MSYS globbing corrupts Git refs
-  // such as HEAD^{commit} and branch@{upstream} before Git sees them.
-  env.MSYS = [env.MSYS, 'noglob'].filter(Boolean).join(' ');
- }
- if (!env.SSH_AUTH_SOCK || !env.SSH_AUTH_SOCK.trim()) {
-  const resolved = await resolveSshAuthSock();
-  if (resolved) {
-   env.SSH_AUTH_SOCK = resolved;
+const buildGitEnv = async (directory: string) => {
+  const inherited = stripAppImageLauncherEnv({ ...process.env });
+  const variables = await directoryEnvironmentForGit(directory);
+  const env = variables ? overlayEnvironment(inherited, variables) : inherited;
+  env.LC_ALL = 'C';
+  if (process.platform === 'win32') {
+    env.MSYS = [env.MSYS, 'noglob'].filter(Boolean).join(' ');
   }
- }
- // The server has no terminal a user could answer. Without this, Git asks
- // for a username or password on its (hidden, on Windows) console and waits
- // forever; credential helpers and GUI prompts still run before this point.
- if (env.GIT_TERMINAL_PROMPT === undefined || variables?.GIT_TERMINAL_PROMPT !== undefined) {
-  env.GIT_TERMINAL_PROMPT = '0';
- }
- return env;
+  if (!env.SSH_AUTH_SOCK || !env.SSH_AUTH_SOCK.trim()) {
+    const resolved = await resolveSshAuthSock();
+    if (resolved) {
+      env.SSH_AUTH_SOCK = resolved;
+    }
+  }
+  if (env.GIT_TERMINAL_PROMPT === undefined || variables?.GIT_TERMINAL_PROMPT !== undefined) {
+    env.GIT_TERMINAL_PROMPT = '0';
+  }
+  return env;
 };
 
-const simpleGitEnvOptions = (env) => {
- const unsafe = {};
- for (const [key, value] of Object.entries(env)) {
-  const category = SIMPLE_GIT_REFUSED_ENV_CATEGORIES[key.toLowerCase()];
-  if (category && process.env[key] === value) {
-   unsafe[category] = true;
+const simpleGitEnvOptions = (env: NodeJS.ProcessEnv) => {
+  const unsafe: GitUnsafeOptions = {};
+  for (const [key, value] of Object.entries(env)) {
+    const category = SIMPLE_GIT_REFUSED_ENV_CATEGORIES.get(key.toLowerCase());
+    if (category && process.env[key] === value) {
+      unsafe[category] = true;
+    }
   }
- }
- return { allowEnvironment: Object.keys(env), unsafe };
+  return { allowEnvironment: Object.keys(env), unsafe };
 };
 
 const createGit = async (directory: string, { stallTimeoutMs = 0, optionalLocks = true, extraEnv }: GitOptions = {}) => {
@@ -617,8 +611,8 @@ const withGitIndexMutationQueue = async <Result>(directory: string, task: () => 
   }
 
   const previous = gitIndexMutationQueues.get(key) || Promise.resolve();
-  const current = previous.catch(() => {}).then(task);
-  const tail = current.catch(() => {});
+  const current = previous.catch(() => { }).then(task);
+  const tail = current.catch(() => { });
   gitIndexMutationQueues.set(key, tail);
 
   try {
@@ -661,12 +655,12 @@ const toRepositoryRoot = (directoryPath: string, topLevel: string) => {
     : path.resolve(directoryPath, normalizedTopLevel);
 };
 
-const resolveGitRepositoryRoot = async (directoryPath, git) => {
- const topLevel = await git.raw(['rev-parse', '--show-toplevel']);
- const normalizedTopLevel = normalizeGitOutputPath(topLevel.trim());
- return path.isAbsolute(normalizedTopLevel)
-  ? path.resolve(normalizedTopLevel)
-  : path.resolve(directoryPath, normalizedTopLevel);
+const resolveGitRepositoryRoot = async (directoryPath: string, git: SimpleGit) => {
+  const topLevel = await git.raw(['rev-parse', '--show-toplevel']);
+  const normalizedTopLevel = normalizeGitOutputPath(topLevel.trim());
+  return path.isAbsolute(normalizedTopLevel)
+    ? path.resolve(normalizedTopLevel)
+    : path.resolve(directoryPath, normalizedTopLevel);
 };
 
 const createRepositoryGitContext = async (directory: string, gitOptions: GitOptions = {}) => {
@@ -879,15 +873,11 @@ const OPENCODE_NOUNS = [
 const OPENCODE_WORKTREE_ATTEMPTS = 26;
 
 const getOpenChamberDataPath = () => (
- process.env.OPENCHAMBER_DATA_DIR
-  ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
-  : path.join(os.homedir(), '.config', 'ohpichamber')
+  process.env.OPENCHAMBER_DATA_DIR
+    ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
+    : path.join(os.homedir(), '.config', 'ohpichamber')
 );
 
-const getOpenCodeDataPath = () => {
-  const xdgDataHome = process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
-  return path.join(xdgDataHome, 'opencode');
-};
 
 const pickRandom = (values: string[]) => values[Math.floor(Math.random() * values.length)];
 
@@ -1274,11 +1264,11 @@ const resolveGitCommitFilePath = async (repoRoot: string, hash: string, candidat
   throw new Error('Invalid file path');
 };
 
-const runGitCommandWithoutEditor = async (cwd, args) => {
- const result = await runGitCommand(cwd, args, { env: { GIT_EDITOR: 'true' } });
- if (!result.success) {
-  throw new Error(result.message || 'Git command failed');
- }
+const runGitCommandWithoutEditor = async (cwd: string, args: string[]) => {
+  const result = await runGitCommand(cwd, args, { env: { GIT_EDITOR: 'true' } });
+  if (!result.success) {
+    throw new Error(result.message || 'Git command failed');
+  }
 };
 
 const runGitCommandOrThrow = async (cwd: string, args: string[], fallbackMessage?: string) => {
@@ -1457,28 +1447,28 @@ const inspectPostCheckoutHook = async (directory: string): Promise<PostCheckoutH
   } catch {
     return null;
   } finally {
-    await handle?.close().catch(() => {});
+    await handle?.close().catch(() => { });
   }
 };
 
-export const inspectContributorCheckoutActions = async (directory, provenance) => {
- const head = String((await runGitCommandOrThrow(directory, ['rev-parse', 'HEAD'], 'Failed to inspect worktree HEAD')).stdout || '').trim().toLowerCase();
- if (head !== provenance.sourceSha) throw Object.assign(new Error('Contributor worktree HEAD changed'), { code: 'STALE_CONFIG', status: 409 });
- const hook = await inspectPostCheckoutHook(directory);
- const setupCommand = String(provenance.setupCommand || '').trim();
- const actions: (PostCheckoutHookAction | { kind: 'setup-command'; command: string })[] = [];
- if (hook) actions.push(hook);
- if (setupCommand) actions.push({ kind: 'setup-command', command: setupCommand });
- const digestActions = actions.map((action) => action.kind === 'post-checkout-hook' ? {
-  kind: action.kind,
-  path: action.path,
-  contentDigest: action.contentDigest,
-  gitDir: action.gitDir,
-  workTree: action.workTree,
-  args: [GIT_NULL_REF, head, '1'],
- } : action);
- const digest = crypto.createHash('sha256').update(JSON.stringify({ head, actions: digestActions })).digest('base64url');
- return Object.freeze({ state: 'awaiting-trust', actions: Object.freeze(actions), digest });
+export const inspectContributorCheckoutActions = async (directory: string, provenance: Pick<ContributorProvenance, 'sourceSha' | 'setupCommand'>) => {
+  const head = String((await runGitCommandOrThrow(directory, ['rev-parse', 'HEAD'], 'Failed to inspect worktree HEAD')).stdout || '').trim().toLowerCase();
+  if (head !== provenance.sourceSha) throw Object.assign(new Error('Contributor worktree HEAD changed'), { code: 'STALE_CONFIG', status: 409 });
+  const hook = await inspectPostCheckoutHook(directory);
+  const setupCommand = String(provenance.setupCommand || '').trim();
+  const actions: (PostCheckoutHookAction | { kind: 'setup-command'; command: string })[] = [];
+  if (hook) actions.push(hook);
+  if (setupCommand) actions.push({ kind: 'setup-command', command: setupCommand });
+  const digestActions = actions.map((action) => action.kind === 'post-checkout-hook' ? {
+    kind: action.kind,
+    path: action.path,
+    contentDigest: action.contentDigest,
+    gitDir: action.gitDir,
+    workTree: action.workTree,
+    args: [GIT_NULL_REF, head, '1'],
+  } : action);
+  const digest = crypto.createHash('sha256').update(JSON.stringify({ head, actions: digestActions })).digest('base64url');
+  return Object.freeze({ state: 'awaiting-trust', actions: Object.freeze(actions), digest });
 };
 
 const derivePrimaryWorktreeRootFromGitDir = (gitDir: string) => primaryWorktreeRootFromGitDir(normalizePath(gitDir));
@@ -1717,17 +1707,17 @@ export async function computeIntegratePlan(input: IntegratePlanInput = {}) {
   return { repoRoot, sourceBranch, targetBranch, commits };
 }
 
-const createIntegrateTempWorktree = async (repoRoot, targetBranch) => {
- const tmpParent = path.join(getOpenChamberDataPath(), 'tmp');
- await fsp.mkdir(tmpParent, { recursive: true });
- const tmpDir = await fsp.mkdtemp(path.join(tmpParent, 'oc-integrate-'));
- try {
-  await runGitCommandOrThrow(repoRoot, ['worktree', 'add', '--force', tmpDir, targetBranch], 'Failed to create temp worktree');
-  return tmpDir;
- } catch (error) {
-  await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
-  throw error;
- }
+const createIntegrateTempWorktree = async (repoRoot: string, targetBranch: string) => {
+  const tmpParent = path.join(getOpenChamberDataPath(), 'tmp');
+  await fsp.mkdir(tmpParent, { recursive: true });
+  const tmpDir = await fsp.mkdtemp(path.join(tmpParent, 'oc-integrate-'));
+  try {
+    await runGitCommandOrThrow(repoRoot, ['worktree', 'add', '--force', tmpDir, targetBranch], 'Failed to create temp worktree');
+    return tmpDir;
+  } catch (error) {
+    await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
 };
 
 const removeIntegrateTempWorktree = async (repoRoot: string, tmpDir: string) => {
@@ -1964,68 +1954,57 @@ const ensureOpenCodeProjectId = async (primaryWorktree: string) => {
   return projectId;
 };
 
-const resolveWorktreeProjectContext = async (directory, options = {}) => {
- const tolerateWorktreeRootConfigError = options?.tolerateWorktreeRootConfigError === true;
- const directoryPath = normalizeDirectoryPath(directory);
- if (!directoryPath) {
-  throw new Error('Directory is required');
- }
-
- const topResult = await runGitCommand(directoryPath, ['rev-parse', '--show-toplevel']);
- // A bare repository has no work tree, so `--show-toplevel` fails there; the
- // bare directory itself still answers the object-level commands worktree
- // creation runs against it.
- const sandbox = topResult.success
-  ? path.resolve(directoryPath, normalizeGitOutputPath(topResult.stdout.trim()))
-  : directoryPath;
-
- const commonResult = await runGitCommandOrThrow(
-  sandbox,
-  ['rev-parse', '--git-common-dir'],
-  'Failed to resolve git common directory'
- );
- const commonDir = path.resolve(sandbox, normalizeGitOutputPath(commonResult.stdout.trim()));
- // `<root>/.git` resolves to the primary checkout; any other layout (a bare
- // repository, a separate git dir) has no primary worktree, and the sandbox
- // directory is the closest thing to one.
- const primaryWorktree = derivePrimaryWorktreeRootFromGitDir(commonDir) || sandbox;
- const projectID = await ensureOpenCodeProjectId(primaryWorktree);
- // The personal project config is named by the canonical path-based id. The
- // Git metadata id above stays the key for the data-dir folder because it
- // follows the checkout when it is moved.
- const projectConfigID = createProjectIdFromPath(primaryWorktree);
- const defaultWorktreeRoot = path.join(getOpenChamberDataPath(), 'worktree', projectID);
- // Creation must not guess a folder the user did not choose, so a config read
- // failure propagates there. Read-only and removal paths pass
- // `tolerateWorktreeRootConfigError` and fall back to the data-dir root, so an
- // unreadable project config never blocks removing a worktree that already
- // exists.
- let configuredWorktreeRoot = null;
- try {
-  if (projectWorktreeDirectoryReader) {
-   configuredWorktreeRoot = resolveWorktreeDirectory(
-    await projectWorktreeDirectoryReader(projectConfigID),
-    primaryWorktree,
-   );
+const resolveWorktreeProjectContext = async (
+  directory: string,
+  options: { tolerateWorktreeRootConfigError?: boolean } = {},
+): Promise<WorktreeProjectContext> => {
+  const tolerateWorktreeRootConfigError = options?.tolerateWorktreeRootConfigError === true;
+  const directoryPath = normalizeDirectoryPath(directory);
+  if (!directoryPath) {
+    throw new Error('Directory is required');
   }
- } catch (error) {
-  if (!tolerateWorktreeRootConfigError) {
-   throw error;
-  }
-  console.warn(
-   'Failed to read the project worktreeDirectory setting; using the Host data-dir worktree root:',
-   error instanceof Error ? error.message : String(error),
+
+  const topResult = await runGitCommand(directoryPath, ['rev-parse', '--show-toplevel']);
+  const sandbox = topResult.success
+    ? path.resolve(directoryPath, normalizeGitOutputPath(topResult.stdout.trim()))
+    : directoryPath;
+
+  const commonResult = await runGitCommandOrThrow(
+    sandbox,
+    ['rev-parse', '--git-common-dir'],
+    'Failed to resolve git common directory',
   );
- }
- const worktreeRoot = configuredWorktreeRoot || defaultWorktreeRoot;
+  const commonDir = path.resolve(sandbox, normalizeGitOutputPath(commonResult.stdout.trim()));
+  const primaryWorktree = derivePrimaryWorktreeRootFromGitDir(commonDir) || sandbox;
+  const projectID = await ensureOpenCodeProjectId(primaryWorktree);
+  const projectConfigID = createProjectIdFromPath(primaryWorktree);
+  const defaultWorktreeRoot = path.join(getOpenChamberDataPath(), 'worktree', projectID);
+  let configuredWorktreeRoot: string | null = null;
+  try {
+    if (projectWorktreeDirectoryReader) {
+      configuredWorktreeRoot = resolveWorktreeDirectory(
+        await projectWorktreeDirectoryReader(projectConfigID),
+        primaryWorktree,
+      );
+    }
+  } catch (error) {
+    if (!tolerateWorktreeRootConfigError) {
+      throw error;
+    }
+    console.warn(
+      'Failed to read the project worktreeDirectory setting; using the Host data-dir worktree root:',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+  const worktreeRoot = configuredWorktreeRoot || defaultWorktreeRoot;
 
- return {
-  projectID,
-  sandbox,
-  primaryWorktree,
-  worktreeRoot,
-  defaultWorktreeRoot,
- };
+  return {
+    projectID,
+    sandbox,
+    primaryWorktree,
+    worktreeRoot,
+    defaultWorktreeRoot,
+  };
 };
 
 const listWorktreeEntries = async (directory: string) => {
@@ -2076,45 +2055,45 @@ const resolveCandidateDirectory = async (worktreeRoot: string, preferredName: st
   throw new Error('Failed to generate a unique worktree name');
 };
 
-const resolveBranchForExistingMode = async (primaryWorktree, existingBranch, preferredBranchName) => {
- const requested = String(existingBranch || '').trim();
- if (!requested) {
-  throw new Error('existingBranch is required in existing mode');
- }
+const resolveBranchForExistingMode = async (primaryWorktree: string, existingBranch: string, preferredBranchName: string) => {
+  const requested = String(existingBranch || '').trim();
+  if (!requested) {
+    throw new Error('existingBranch is required in existing mode');
+  }
 
- const normalizedLocal = cleanBranchName(requested);
- const localRef = `refs/heads/${normalizedLocal}`;
- const localExists = await runGitCommand(primaryWorktree, ['show-ref', '--verify', '--quiet', localRef]);
- if (localExists.success) {
+  const normalizedLocal = cleanBranchName(requested);
+  const localRef = `refs/heads/${normalizedLocal}`;
+  const localExists = await runGitCommand(primaryWorktree, ['show-ref', '--verify', '--quiet', localRef]);
+  if (localExists.success) {
+    return {
+      localBranch: normalizedLocal,
+      checkoutRef: normalizedLocal,
+      createLocalBranch: false,
+      remoteRef: null,
+    };
+  }
+
+  const remoteRef = parseRemoteBranchRef(requested);
+  if (!remoteRef) {
+    throw new Error(`Branch not found: ${requested}`);
+  }
+
+  const remoteExists = await runGitCommand(primaryWorktree, ['show-ref', '--verify', '--quiet', remoteRef.fullRef]);
+  if (!remoteExists.success) {
+    throw new Error(`Remote branch is not available locally: ${requested}. Fetch it explicitly and retry.`);
+  }
+
+  const localBranch = cleanBranchName(preferredBranchName || remoteRef.branch || requested);
+  if (!localBranch) {
+    throw new Error('Failed to resolve local branch name for existing branch worktree');
+  }
+
   return {
-   localBranch: normalizedLocal,
-   checkoutRef: normalizedLocal,
-   createLocalBranch: false,
-   remoteRef: null,
+    localBranch,
+    checkoutRef: remoteRef.remoteRef,
+    createLocalBranch: true,
+    remoteRef,
   };
- }
-
- const remoteRef = parseRemoteBranchRef(requested);
- if (!remoteRef) {
-  throw new Error(`Branch not found: ${requested}`);
- }
-
- const remoteExists = await runGitCommand(primaryWorktree, ['show-ref', '--verify', '--quiet', remoteRef.fullRef]);
- if (!remoteExists.success) {
-  throw new Error(`Remote branch is not available locally: ${requested}. Fetch it explicitly and retry.`);
- }
-
- const localBranch = cleanBranchName(preferredBranchName || remoteRef.branch || requested);
- if (!localBranch) {
-  throw new Error('Failed to resolve local branch name for existing branch worktree');
- }
-
- return {
-  localBranch,
-  checkoutRef: remoteRef.remoteRef,
-  createLocalBranch: true,
-  remoteRef,
- };
 };
 
 const findBranchInUse = async (primaryWorktree: string, localBranchName: string) => {
@@ -2339,19 +2318,19 @@ const removeCreateCommandLink = async (link: string | undefined, worktreeDirecto
   }
 };
 
-const runWorktreeStartScripts = async (directory, _projectDirectory, startCommand, signal) => {
- const extraCommand = String(startCommand || '').trim();
- if (!extraCommand) {
-  return;
- }
- const extraResult = await runWorktreeStartCommand(directory, extraCommand, { signal });
- if (!extraResult.success) {
-  console.warn('Worktree start command failed:', extraResult.message || extraResult.stderr || extraResult.stdout);
- }
+const runWorktreeStartScripts = async (directory: string, _projectDirectory: string | undefined, startCommand: string | undefined, signal?: AbortSignal) => {
+  const extraCommand = String(startCommand || '').trim();
+  if (!extraCommand) {
+    return;
+  }
+  const extraResult = await runWorktreeStartCommand(directory, extraCommand, { signal });
+  if (!extraResult.success) {
+    console.warn('Worktree start command failed:', extraResult.message || extraResult.stderr || extraResult.stdout);
+  }
 };
 
 const queueWorktreeBootstrap = (args: WorktreeBootstrapTask) => {
-const {
+  const {
     directory,
     projectDirectory,
     primaryWorktree,
@@ -2369,13 +2348,13 @@ const {
     populated,
   } = args;
 
-const setupKey = toBootstrapStateKey(directory);
+  const setupKey = toBootstrapStateKey(directory);
 
-const setupCancellation = new AbortController();
+  const setupCancellation = new AbortController();
 
-worktreeSetupCancellations.set(setupKey, setupCancellation);
+  worktreeSetupCancellations.set(setupKey, setupCancellation);
 
-const task = new Promise<void>((resolve) => setTimeout(resolve, 0))
+  const task = new Promise<void>((resolve) => setTimeout(resolve, 0))
     .then(async () => {
       if (!populated) await populateWorktreeWithLockRecovery(directory);
       const hydration = hydrateCheckout ? await hydrateCheckout({
@@ -2441,7 +2420,7 @@ const task = new Promise<void>((resolve) => setTimeout(resolve, 0))
         : pathLengthFailure
           ? formatWorktreePopulateError(error instanceof Error ? error.message : error)
           : worktreeBootstrapFailureMessage(failureCode)
-            ?? 'Worktree bootstrap failed. Inspect the checkout and repair it before use.';
+          ?? 'Worktree bootstrap failed. Inspect the checkout and repair it before use.';
       await setWorktreeBootstrapState(
         directory,
         WORKTREE_BOOTSTRAP_FAILED,
@@ -2452,22 +2431,22 @@ const task = new Promise<void>((resolve) => setTimeout(resolve, 0))
         hydration,
         failureCode,
         bootstrapStore,
-      ).catch(() => {});
+      ).catch(() => { });
       console.warn('Worktree bootstrap task failed:', error instanceof Error ? error.message : String(error));
     });
 
-const forgetCancellation = () => worktreeSetupCancellations.delete(setupKey);
+  const forgetCancellation = () => worktreeSetupCancellations.delete(setupKey);
 
-void task.then(forgetCancellation, forgetCancellation);
+  void task.then(forgetCancellation, forgetCancellation);
 
-trackWorktreeBootstrapTask(directory, task);
+  trackWorktreeBootstrapTask(directory, task);
 };
 
 const withRemoteProvisioningQueue = async <Result>(primaryWorktree: string, remoteName: string, task: () => Promise<Result>) => {
   const key = `${path.resolve(primaryWorktree)}::${remoteName}`;
   const previous = remoteProvisioningQueues.get(key) || Promise.resolve();
-  const current = previous.catch(() => {}).then(task);
-  const tail = current.catch(() => {});
+  const current = previous.catch(() => { }).then(task);
+  const tail = current.catch(() => { });
   remoteProvisioningQueues.set(key, tail);
   try {
     return await current;
@@ -2604,9 +2583,9 @@ const resolveExistingWorktreeSource = async (primaryWorktree: string, input: Wor
   }
   const upstream = resolved.remoteRef
     ? {
-        remote: explicitUpstreamRemote || resolved.remoteRef.remote,
-        branch: explicitUpstreamBranch || resolved.remoteRef.branch,
-      }
+      remote: explicitUpstreamRemote || resolved.remoteRef.remote,
+      branch: explicitUpstreamBranch || resolved.remoteRef.branch,
+    }
     : (explicitUpstreamRemote && explicitUpstreamBranch
       ? { remote: explicitUpstreamRemote, branch: explicitUpstreamBranch }
       : null);
@@ -2686,24 +2665,24 @@ const applyUpstreamConfiguration = async (args: UpstreamConfiguration) => {
 
 const warnedUnsupportedRoots = new Set<string>();
 
-export async function initializeRepository(directory) {
- const normalizedDirectory = normalizeDirectoryPath(directory);
- if (typeof normalizedDirectory !== 'string' || !normalizedDirectory.trim()) {
-  throw Object.assign(new Error('directory is required'), { statusCode: 400 });
- }
- const directoryPath = path.resolve(normalizedDirectory);
- const rootReason = unsupportedRepositoryRootReason(directoryPath);
- if (rootReason === 'home') {
-  throw Object.assign(new Error('Git is not initialized in the home directory: a repository there covers every file you own.'), { statusCode: 400 });
- }
- if (rootReason === 'filesystem-root') {
-  throw Object.assign(new Error('Git is not initialized at the root of a disk.'), { statusCode: 400 });
- }
- await fsp.stat(directoryPath);
- const result = await runGitCommand(directoryPath, ['init']);
- if (!result.success) {
-  throw Object.assign(new Error(result.message || 'Failed to initialize Git'), { statusCode: 500 });
- }
+export async function initializeRepository(directory: string) {
+  const normalizedDirectory = normalizeDirectoryPath(directory);
+  if (!isPrimitiveString(normalizedDirectory) || !normalizedDirectory.trim()) {
+    throw Object.assign(new Error('directory is required'), { statusCode: 400 });
+  }
+  const directoryPath = path.resolve(normalizedDirectory);
+  const rootReason = unsupportedRepositoryRootReason(directoryPath);
+  if (rootReason === 'home') {
+    throw Object.assign(new Error('Git is not initialized in the home directory: a repository there covers every file you own.'), { statusCode: 400 });
+  }
+  if (rootReason === 'filesystem-root') {
+    throw Object.assign(new Error('Git is not initialized at the root of a disk.'), { statusCode: 400 });
+  }
+  await fsp.stat(directoryPath);
+  const result = await runGitCommand(directoryPath, ['init']);
+  if (!result.success) {
+    throw Object.assign(new Error(result.message || 'Failed to initialize Git'), { statusCode: 500 });
+  }
 }
 
 const probeFailureMessage = (result: GitCommandResult) => {
@@ -2749,38 +2728,37 @@ export async function isGitRepository(directory: string, options?: { strict?: bo
   return (await probeRepository(normalizeDirectoryPath(directory), options)).isRepository;
 }
 
-const hasGitDirectoryEntry = async (directoryPath) => {
- const hasEntry = async (entry) => {
-  try { await fsp.lstat(entry); return true; }
-  catch (error) {
-   if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return false;
-   throw error;
+const hasGitDirectoryEntry = async (directoryPath: string) => {
+  const hasEntry = async (entry: string) => {
+    try { await fsp.lstat(entry); return true; }
+    catch (error) {
+      const code = errorField(error, 'code');
+      if (code === 'ENOENT' || code === 'ENOTDIR') return false;
+      throw error;
+    }
+  };
+  try {
+    let current = await fsp.realpath(path.resolve(directoryPath));
+    const device = (await fsp.stat(current)).dev;
+    for (; ;) {
+      if (await hasEntry(path.join(current, '.git'))) return true;
+      const parent = path.dirname(current);
+      if (parent === current) return false;
+      if ((await fsp.stat(parent)).dev !== device) return false;
+      current = parent;
+    }
+  } catch {
+    return true;
   }
- };
- try {
-  let current = await fsp.realpath(path.resolve(directoryPath));
-  const device = (await fsp.stat(current)).dev;
-  for (; ;) {
-   if (await hasEntry(path.join(current, '.git'))) return true;
-   const parent = path.dirname(current);
-   if (parent === current) return false;
-   if ((await fsp.stat(parent)).dev !== device) return false;
-   current = parent;
-  }
- } catch {
-  return true;
- }
 };
 
-export const isOutsideGitRepository = async (directory) => {
- const directoryPath = String(normalizeDirectoryPath(directory) ?? '');
- if (!directoryPath.trim()) return false;
- const result = await runGitCommand(directoryPath, ['rev-parse', '--git-dir', '--show-toplevel'], { timeoutMs: GIT_PROBE_TIMEOUT_MS });
- if (result.success || result.exitCode !== 128) return false;
- // A bare repository or the `.git` directory itself exits 128 with
- // "must be run in a work tree" but does answer its git directory.
- if (result.stdout.trim()) return false;
- return !(await hasGitDirectoryEntry(directoryPath));
+export const isOutsideGitRepository = async (directory: string) => {
+  const directoryPath = String(normalizeDirectoryPath(directory) ?? '');
+  if (!directoryPath.trim()) return false;
+  const result = await runGitCommand(directoryPath, ['rev-parse', '--git-dir', '--show-toplevel'], { timeoutMs: GIT_PROBE_TIMEOUT_MS });
+  if (result.success || result.exitCode !== 128) return false;
+  if (result.stdout.trim()) return false;
+  return !(await hasGitDirectoryEntry(directoryPath));
 };
 
 export async function getGlobalIdentity() {
@@ -2952,7 +2930,7 @@ const killProcessTree = (child: ChildProcess) => {
   if (!child.pid) return;
   if (process.platform === 'win32') {
     try {
-      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on('error', () => {});
+      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on('error', () => { });
     } catch {
       child.kill('SIGKILL');
     }
@@ -3162,9 +3140,9 @@ async function readStatus(normalizedDirectory: string, lightMode: boolean) {
     const [stagedStatsRaw, workingStatsRaw] = lightMode
       ? ['', '']
       : await Promise.all([
-          git.raw(['diff', '--cached', '--numstat', '-z']).catch(() => ''),
-          git.raw(['diff-files', '-M', '--numstat', '-z']).catch(() => ''),
-        ]);
+        git.raw(['diff', '--cached', '--numstat', '-z']).catch(() => ''),
+        git.raw(['diff-files', '-M', '--numstat', '-z']).catch(() => ''),
+      ]);
 
     const stagedDiffStats: Record<string, DiffStats> = {};
     const workingDiffStats: Record<string, DiffStats> = {};
@@ -4154,7 +4132,7 @@ export async function revertFile(directory: string, filePath: string, options: {
       try {
         await git.raw(['restore', '--staged', '--', repoPath]);
       } catch {
-        await git.raw(['reset', 'HEAD', '--', repoPath]).catch(() => {});
+        await git.raw(['reset', 'HEAD', '--', repoPath]).catch(() => { });
       }
     }
 
@@ -4285,7 +4263,7 @@ export async function applyHunk(directory: string, filePath: string, options: { 
       await git.raw(['apply', ...flags, tmpPath]);
     } finally {
       if (tmpPath) {
-        await fsp.rm(tmpPath, { force: true }).catch(() => {});
+        await fsp.rm(tmpPath, { force: true }).catch(() => { });
       }
     }
   });
@@ -4455,196 +4433,238 @@ export async function unstageFiles<Paths>(directory: string, paths: Paths) {
   });
 }
 
-const writeCommitNote = async (git, sha, message) => {
- await git.raw(['notes', 'add', '-f', '-m', message, sha]);
+const writeCommitNote = async (git: SimpleGit, sha: string, message: string) => {
+  await git.raw(['notes', 'add', '-f', '-m', message, sha]);
 };
 
-const applyCommitExtras = async (git, directoryPath, commit, options) => {
- const applied = {};
- const failed = [];
- if (options.changeId) {
-  try {
-   const existing = await readCommitChangeId(directoryPath, commit);
-   if (existing) {
-    applied.changeId = existing;
-   } else {
-    const amended = await addChangeIdToHead(directoryPath, commit, { requireClean: false });
-    applied.changeId = amended.changeId;
-    applied.sha = amended.sha;
-   }
-  } catch (error) {
-   failed.push({ extra: 'changeId', code: error?.code ?? 'CHANGE_ID_FAILED', message: error?.message ?? 'Change-Id was not applied' });
+interface CommitExtraFailure {
+  extra: string;
+  code: unknown;
+  message: unknown;
+}
+
+interface CommitExtrasResult {
+  changeId?: string;
+  sha?: string;
+  notes?: boolean;
+  failed: CommitExtraFailure[];
+}
+
+interface CommitExtrasApplied {
+  changeId?: string;
+  sha?: string;
+  notes?: boolean;
+}
+
+const applyCommitExtras = async (
+  git: SimpleGit,
+  directoryPath: string,
+  commitSha: string,
+  options: { changeId: boolean; notes: boolean; notesMessage: string },
+): Promise<CommitExtrasResult> => {
+  const applied: CommitExtrasApplied = {};
+  const failed: CommitExtraFailure[] = [];
+  if (options.changeId) {
+    try {
+      const existing = await readCommitChangeId(directoryPath, commitSha);
+      if (existing) {
+        applied.changeId = existing;
+      } else {
+        const amended = await addChangeIdToHead(directoryPath, commitSha, { requireClean: false });
+        applied.changeId = amended.changeId;
+        applied.sha = amended.sha;
+      }
+    } catch (error) {
+      failed.push({
+        extra: 'changeId',
+        code: errorField(error, 'code') ?? 'CHANGE_ID_FAILED',
+        message: errorField(error, 'message') ?? 'Change-Id was not applied',
+      });
+    }
   }
- }
- if (options.notes) {
-  try {
-   await writeCommitNote(git, applied.sha ?? commit, options.notesMessage);
-   applied.notes = true;
-  } catch (error) {
-   failed.push({ extra: 'notes', code: 'GIT_NOTES_FAILED', message: error?.message ?? 'The Git note was not written' });
+  if (options.notes) {
+    try {
+      await writeCommitNote(git, applied.sha ?? commitSha, options.notesMessage);
+      applied.notes = true;
+    } catch (error) {
+      failed.push({
+        extra: 'notes',
+        code: 'GIT_NOTES_FAILED',
+        message: errorField(error, 'message') ?? 'The Git note was not written',
+      });
+    }
   }
- }
- return { ...applied, failed };
+  return { ...applied, failed };
 };
 
-export async function commit(directory, message, options = {}) {
- return withGitIndexMutationQueue(directory, async () => {
-  const { directoryPath, directoryGit, repoRoot, git } = await createRepositoryGitContext(directory);
-  // An identity applied here writes the repository's own author, and that is
-  // what a commit uses. A repository on the System identity deliberately has
-  // none: it says no override applies, so the machine's own author answers,
-  // which is what Git itself would do. The panel names that author before
-  // the commit, so it is a stated choice rather than an ambient surprise.
-  const [localUserName, localUserEmail] = await Promise.all([
-   git.getConfig('user.name', 'local').catch(() => null),
-   git.getConfig('user.email', 'local').catch(() => null),
-  ]);
-  if (!localUserName?.value?.trim() || !localUserEmail?.value?.trim()) {
-   const [globalUserName, globalUserEmail] = await Promise.all([
-    git.getConfig('user.name', 'global').catch(() => null),
-    git.getConfig('user.email', 'global').catch(() => null),
-   ]);
-   if (!globalUserName?.value?.trim() || !globalUserEmail?.value?.trim()) {
-    throw new Error('No Git author is configured. Choose an identity for this repository, or set user.name and user.email on this computer.');
-   }
-  }
-  let temporarilyUnstagedFiles = [];
+export interface CommitOptions {
+  addAll?: boolean;
+  files?: unknown;
+  stageFiles?: unknown;
+  changeId?: boolean | undefined;
+  notes?: boolean | undefined;
+  notesMessage?: unknown;
+}
 
-  try {
-   const requestedFiles = Array.isArray(options.files)
-    ? options.files
-     .map((value) => String(value || '').trim())
-     .filter(Boolean)
-    : [];
-   const requestedStageFiles = Array.isArray(options.stageFiles)
-    ? options.stageFiles
-     .map((value) => String(value || '').trim())
-     .filter(Boolean)
-    : null;
-   let filesToCommit = [];
-   let commitFromIndexOnly = false;
+interface GitCommitResult {
+  success: true;
+  commit: string;
+  branch: string;
+  summary: SimpleGitCommitResult['summary'];
+  changeId?: string;
+  notes?: true;
+}
 
-   if (options.addAll) {
-    await git.add('.');
-   } else if (requestedFiles.length > 0) {
-    filesToCommit = Array.from(new Set(await Promise.all(requestedFiles.map(async (filePath) => {
-     const fileContext = await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot);
-     return fileContext.repoPath;
-    }))));
-
-    const stageFilesToCommit = requestedStageFiles
-     ? Array.from(new Set(await Promise.all(requestedStageFiles.map(async (filePath) => {
-      const fileContext = await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot);
-      return fileContext.repoPath;
-     }))))
-     : null;
-
-    const status = await git.status();
-    const fileStatusByPath = new Map(status.files.map((file) => [file.path, file]));
-    filesToCommit = filesToCommit.filter((filePath) => fileStatusByPath.has(filePath));
-
-    if (filesToCommit.length === 0) {
-     throw new Error('No selected files are available to commit. Refresh git status and try again.');
+export async function commit(directory: string, message: string, options: CommitOptions = {}) {
+  return withGitIndexMutationQueue(directory, async () => {
+    const { directoryPath, directoryGit, repoRoot, git } = await createRepositoryGitContext(directory);
+    const [localUserName, localUserEmail] = await Promise.all([
+      git.getConfig('user.name', 'local').catch(() => null),
+      git.getConfig('user.email', 'local').catch(() => null),
+    ]);
+    if (!localUserName?.value?.trim() || !localUserEmail?.value?.trim()) {
+      const [globalUserName, globalUserEmail] = await Promise.all([
+        git.getConfig('user.name', 'global').catch(() => null),
+        git.getConfig('user.email', 'global').catch(() => null),
+      ]);
+      if (!globalUserName?.value?.trim() || !globalUserEmail?.value?.trim()) {
+        throw new Error('No Git author is configured. Choose an identity for this repository, or set user.name and user.email on this computer.');
+      }
     }
+    let temporarilyUnstagedFiles: string[] = [];
 
-    if (requestedStageFiles) {
-     commitFromIndexOnly = true;
-     const selectedFileSet = new Set(filesToCommit);
-     temporarilyUnstagedFiles = status.files
-      .filter((file) => {
-       const indexStatus = (file.index || '').trim();
-       return indexStatus && indexStatus !== '?' && !selectedFileSet.has(file.path);
-      })
-      .map((file) => file.path);
+    try {
+      const requestedFiles = Array.isArray(options.files)
+        ? options.files
+          .map((value) => String(value || '').trim())
+          .filter(Boolean)
+        : [];
+      const requestedStageFiles = Array.isArray(options.stageFiles)
+        ? options.stageFiles
+          .map((value) => String(value || '').trim())
+          .filter(Boolean)
+        : null;
+      let filesToCommit: string[] = [];
+      let commitFromIndexOnly = false;
 
-     if (temporarilyUnstagedFiles.length > 0) {
-      await git.raw(['restore', '--staged', '--', ...temporarilyUnstagedFiles]);
-     }
-    }
+      if (options.addAll) {
+        await git.add('.');
+      } else if (requestedFiles.length > 0) {
+        filesToCommit = Array.from(new Set(await Promise.all(requestedFiles.map(async (filePath) => {
+          const fileContext = await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot);
+          return fileContext.repoPath;
+        }))));
 
-    const filesNeedingAdd = requestedStageFiles
-     ? (stageFilesToCommit || []).filter((filePath) => fileStatusByPath.has(filePath))
-     : filesToCommit.filter((filePath) => {
-      const fileStatus = fileStatusByPath.get(filePath);
-      if (!fileStatus) {
-       return false;
+        const stageFilesToCommit = requestedStageFiles
+          ? Array.from(new Set(await Promise.all(requestedStageFiles.map(async (filePath) => {
+            const fileContext = await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot);
+            return fileContext.repoPath;
+          }))))
+          : null;
+
+        const status = await git.status();
+        const fileStatusByPath = new Map(status.files.map((file) => [file.path, file]));
+        filesToCommit = filesToCommit.filter((filePath) => fileStatusByPath.has(filePath));
+
+        if (filesToCommit.length === 0) {
+          throw new Error('No selected files are available to commit. Refresh git status and try again.');
+        }
+
+        if (requestedStageFiles) {
+          commitFromIndexOnly = true;
+          const selectedFileSet = new Set(filesToCommit);
+          temporarilyUnstagedFiles = status.files
+            .filter((file) => {
+              const indexStatus = (file.index || '').trim();
+              return indexStatus && indexStatus !== '?' && !selectedFileSet.has(file.path);
+            })
+            .map((file) => file.path);
+
+          if (temporarilyUnstagedFiles.length > 0) {
+            await git.raw(['restore', '--staged', '--', ...temporarilyUnstagedFiles]);
+          }
+        }
+
+        const filesNeedingAdd = requestedStageFiles
+          ? (stageFilesToCommit || []).filter((filePath) => fileStatusByPath.has(filePath))
+          : filesToCommit.filter((filePath) => {
+            const fileStatus = fileStatusByPath.get(filePath);
+            if (!fileStatus) {
+              return false;
+            }
+
+            const alreadyFullyStaged = fileStatus.index !== ' ' && fileStatus.working_dir === ' ';
+            return !alreadyFullyStaged;
+          });
+
+        if (filesNeedingAdd.length > 0) {
+          await git.raw(['add', '--', ...filesNeedingAdd]);
+        }
       }
 
-      const alreadyFullyStaged = fileStatus.index !== ' ' && fileStatus.working_dir === ' ';
-      return !alreadyFullyStaged;
-     });
+      const commitArgs =
+        !commitFromIndexOnly && !options.addAll && filesToCommit.length > 0
+          ? filesToCommit
+          : undefined;
 
-    if (filesNeedingAdd.length > 0) {
-     await git.raw(['add', '--', ...filesNeedingAdd]);
+      let result;
+      try {
+        result = await git.commit(message, commitArgs);
+      } catch (error) {
+        const gitErrorText = parseGitErrorText(error);
+        const isPathspecError = gitErrorText.includes('pathspec') && gitErrorText.includes('did not match any files');
+        if (!isPathspecError || !commitArgs || commitArgs.length === 0) {
+          throw error;
+        }
+
+        result = await git.commit(message);
+      }
+
+      if (temporarilyUnstagedFiles.length > 0) {
+        await git.raw(['add', '--', ...temporarilyUnstagedFiles]).catch((restoreError) => {
+          console.error('Failed to restore temporarily unstaged files:', restoreError);
+        });
+      }
+
+      const extras: CommitExtrasResult = options.changeId === true || options.notes === true
+        ? await applyCommitExtras(git, directoryPath, result.commit, {
+          changeId: options.changeId === true,
+          notes: options.notes === true,
+          notesMessage: isPrimitiveString(options.notesMessage) && options.notesMessage.trim()
+            ? options.notesMessage.trim()
+            : String(message).trim(),
+        })
+        : { failed: [] };
+      if (extras.failed.length > 0) {
+        const error = Object.assign(new Error('The commit was created but not every requested extra was applied'), {
+          code: 'COMMIT_EXTRAS_FAILED',
+          status: 409,
+          commit: extras.sha ?? result.commit,
+          branch: result.branch,
+          extras: { changeId: extras.changeId ?? null, notes: extras.notes === true, failed: extras.failed },
+        });
+        throw error;
+      }
+
+      const commitResult: GitCommitResult = {
+        success: true,
+        commit: extras.sha ?? result.commit,
+        branch: result.branch,
+        summary: result.summary,
+      };
+      if (extras.changeId) commitResult.changeId = extras.changeId;
+      if (extras.notes) commitResult.notes = true;
+      return commitResult;
+    } catch (error) {
+      if (temporarilyUnstagedFiles.length > 0) {
+        await git.raw(['add', '--', ...temporarilyUnstagedFiles]).catch((restoreError) => {
+          console.error('Failed to restore temporarily unstaged files after commit failure:', restoreError);
+        });
+      }
+      console.error('Failed to commit:', error);
+      throw error;
     }
-   }
-
-   const commitArgs =
-    !commitFromIndexOnly && !options.addAll && filesToCommit.length > 0
-     ? filesToCommit
-     : undefined;
-
-   let result;
-   try {
-    result = await git.commit(message, commitArgs);
-   } catch (error) {
-    const gitErrorText = parseGitErrorText(error);
-    const isPathspecError = gitErrorText.includes('pathspec') && gitErrorText.includes('did not match any files');
-    if (!isPathspecError || !commitArgs || commitArgs.length === 0) {
-     throw error;
-    }
-
-    // Fallback for deleted/stale selections: commit currently staged changes.
-    result = await git.commit(message);
-   }
-
-   if (temporarilyUnstagedFiles.length > 0) {
-    await git.raw(['add', '--', ...temporarilyUnstagedFiles]).catch((restoreError) => {
-     console.error('Failed to restore temporarily unstaged files:', restoreError);
-    });
-   }
-
-   // The direct path stays byte-for-byte the same: no extra requested means
-   // no amend, no note, no second Git call.
-   const extras = options.changeId === true || options.notes === true
-    ? await applyCommitExtras(git, directoryPath, result.commit, {
-     changeId: options.changeId === true,
-     notes: options.notes === true,
-     notesMessage: typeof options.notesMessage === 'string' && options.notesMessage.trim() ? options.notesMessage.trim() : String(message).trim(),
-    })
-    : { failed: [] };
-   if (extras.failed.length > 0) {
-    // The commit exists; only the requested extras did not apply. The route
-    // turns this into a non-2xx body naming the commit and each failure, so
-    // a partial outcome is never reported as a clean commit.
-    const error = Object.assign(new Error('The commit was created but not every requested extra was applied'), {
-     code: 'COMMIT_EXTRAS_FAILED',
-     status: 409,
-     commit: extras.sha ?? result.commit,
-     branch: result.branch,
-     extras: { changeId: extras.changeId ?? null, notes: extras.notes === true, failed: extras.failed },
-    });
-    throw error;
-   }
-
-   return {
-    success: true,
-    commit: extras.sha ?? result.commit,
-    branch: result.branch,
-    summary: result.summary,
-    ...(extras.changeId ? { changeId: extras.changeId } : {}),
-    ...(extras.notes ? { notes: true } : {}),
-   };
-  } catch (error) {
-   if (temporarilyUnstagedFiles.length > 0) {
-    await git.raw(['add', '--', ...temporarilyUnstagedFiles]).catch((restoreError) => {
-     console.error('Failed to restore temporarily unstaged files after commit failure:', restoreError);
-    });
-   }
-   console.error('Failed to commit:', error);
-   throw error;
-  }
- });
+  });
 }
 
 const withoutDetachedHeadEntry = (summary: BranchSummary) => {
@@ -5302,15 +5322,15 @@ const resolveWorktreeRepositoryKey = async (directoryPath: string) => {
   return key;
 };
 
-const readWorktreeTopologyFingerprint = (repositoryKey) => {
- const worktreesDir = path.join(repositoryKey, 'worktrees');
- try {
-  const stat = fs.statSync(worktreesDir);
-  const names = fs.readdirSync(worktreesDir).sort();
-  return `${stat.mtimeMs}:${names.join('\0')}`;
- } catch {
-  return 'none';
- }
+const readWorktreeTopologyFingerprint = (repositoryKey: string) => {
+  const worktreesDir = path.join(repositoryKey, 'worktrees');
+  try {
+    const stat = fs.statSync(worktreesDir);
+    const names = fs.readdirSync(worktreesDir).sort();
+    return `${stat.mtimeMs}:${names.join('\0')}`;
+  } catch {
+    return 'none';
+  }
 };
 
 const trackWorktreeTopologyDirectory = (repositoryKey: string, directoryPath: string) => {
@@ -5374,11 +5394,11 @@ const publishWorktreeTopologyChange = async (directory: string) => {
 };
 
 export async function validateWorktreeCreate(directory: string, input: WorktreeCreateInput = {}) {
-const mode = input?.mode === 'existing' ? 'existing' : 'new';
+  const mode = input?.mode === 'existing' ? 'existing' : 'new';
 
-const errors = [];
+  const errors = [];
 
-try {
+  try {
     const context = await resolveWorktreeProjectContext(directory);
     const preferredBranchName = cleanBranchName(String(input?.branchName || '').trim());
     const startRef = normalizeStartRef(input?.startRef);
@@ -5638,48 +5658,48 @@ const branchNameClashesWithExistingRef = async (primaryWorktree: string, branchN
 };
 
 async function attachGitWorktreeToCandidateWithoutRemoteRollback(context: WorktreeProjectContext, candidate: WorktreeCandidate, input: WorktreeCreateInput = {}, serverOptions: WorktreeServerOptions = {}) {
-const mode = input?.mode === 'existing' ? 'existing' : 'new';
+  const mode = input?.mode === 'existing' ? 'existing' : 'new';
 
-const startRef = normalizeStartRef(input?.startRef);
+  const startRef = normalizeStartRef(input?.startRef);
 
-const ensureRemoteName = String(input?.ensureRemoteName || '').trim();
+  const ensureRemoteName = String(input?.ensureRemoteName || '').trim();
 
-const ensureRemoteUrl = String(input?.ensureRemoteUrl || '').trim();
+  const ensureRemoteUrl = String(input?.ensureRemoteUrl || '').trim();
 
-let localBranch = '';
+  let localBranch = '';
 
-let inferredUpstream = null;
+  let inferredUpstream = null;
 
-let shouldSetUpstream = input?.contributorFork === true ? false : Boolean(input?.setUpstream);
+  let shouldSetUpstream = input?.contributorFork === true ? false : Boolean(input?.setUpstream);
 
-let checkoutRemoteName = '';
+  let checkoutRemoteName = '';
 
-const expectedRevision = String(input?.expectedRevision || '').trim();
+  const expectedRevision = String(input?.expectedRevision || '').trim();
 
-const contributorFork = input?.contributorFork === true;
+  const contributorFork = input?.contributorFork === true;
 
-const contributorSource = serverOptions.contributorSource;
+  const contributorSource = serverOptions.contributorSource;
 
-if (contributorFork && (!ensureRemoteName || !ensureRemoteUrl || !expectedRevision
+  if (contributorFork && (!ensureRemoteName || !ensureRemoteUrl || !expectedRevision
     || !contributorSource || !(serverOptions.contributorProvenance?.compareAndSwap instanceof Function))) {
     throw Object.assign(new Error('Contributor worktree provenance requirements are incomplete'), {
       code: 'INVALID_CONTRIBUTOR_WORKTREE', status: 400,
     });
   }
 
-let createdLocalBranch = false;
+  let createdLocalBranch = false;
 
-let parsedStartBranch = null;
+  let parsedStartBranch = null;
 
-let movedLocalBranch = null;
+  let movedLocalBranch = null;
 
-const worktreeAddArgs = ['worktree', 'add', '--no-checkout'];
+  const worktreeAddArgs = ['worktree', 'add', '--no-checkout'];
 
-const createCommand = contributorFork ? '' : String(input?.createCommand || '').trim();
+  const createCommand = contributorFork ? '' : String(input?.createCommand || '').trim();
 
-let branchStart: BranchStart | null = null;
+  let branchStart: BranchStart | null = null;
 
-if (mode === 'existing') {
+  if (mode === 'existing') {
     const resolved = await resolveExistingWorktreeSource(context.primaryWorktree, input, 'create');
     localBranch = resolved.localBranch;
     shouldSetUpstream = resolved.setUpstream;
@@ -5754,18 +5774,18 @@ if (mode === 'existing') {
     branchStart = { start: startRef && startRef !== 'HEAD' ? startRef : 'HEAD', noTrack: Boolean(parsedRemoteStartRef) };
   }
 
-if (mode === 'existing' && ensureRemoteName && ensureRemoteUrl) {
+  if (mode === 'existing' && ensureRemoteName && ensureRemoteUrl) {
     await ensureRemoteWithUrlUnlocked(context.primaryWorktree, ensureRemoteName, ensureRemoteUrl);
   }
 
-if (!checkoutRemoteName) {
+  if (!checkoutRemoteName) {
     checkoutRemoteName = await resolveCheckoutRemoteName(context.primaryWorktree, mode === 'existing' ? localBranch : startRef) ?? '';
   }
 
-const branchNameConflict = (mode === 'new' || createdLocalBranch)
+  const branchNameConflict = (mode === 'new' || createdLocalBranch)
     && await branchNameClashesWithExistingRef(context.primaryWorktree, localBranch);
 
-const releaseLocalBranch = async () => {
+  const releaseLocalBranch = async () => {
     if (createdLocalBranch) return (await runGitCommand(context.primaryWorktree, ['branch', '-D', localBranch])).success;
     if (movedLocalBranch) {
       return (await runGitCommand(context.primaryWorktree, ['branch', '-f', localBranch, movedLocalBranch.tip])).success;
@@ -5773,7 +5793,7 @@ const releaseLocalBranch = async () => {
     return true;
   };
 
-try {
+  try {
     if (createCommand) {
       const directory = await createWorktreeWithCommand({
         primaryWorktree: context.primaryWorktree,
@@ -5800,14 +5820,14 @@ try {
     throw error;
   }
 
-await publishWorktreeTopologyChange(context.primaryWorktree);
+  await publishWorktreeTopologyChange(context.primaryWorktree);
 
-if (mode === 'new' && startRef && startRef !== 'HEAD') {
+  if (mode === 'new' && startRef && startRef !== 'HEAD') {
     const parent = parsedStartBranch ?? await localBranchNameOf(context.primaryWorktree, startRef);
     await recordBranchParent(context.primaryWorktree, localBranch, parent);
   }
 
-if (expectedRevision) {
+  if (expectedRevision) {
     const createdHead = await runGitCommand(candidate.directory, ['rev-parse', '--verify', 'HEAD']);
     if (!createdHead.success || String(createdHead.stdout || '').trim() !== expectedRevision) {
       const removed = await runGitCommand(context.primaryWorktree, ['worktree', 'remove', '--force', candidate.directory]);
@@ -5821,9 +5841,9 @@ if (expectedRevision) {
     }
   }
 
-let provenanceRecord = null;
+  let provenanceRecord = null;
 
-if (contributorFork && contributorSource && serverOptions.contributorProvenance) {
+  if (contributorFork && contributorSource && serverOptions.contributorProvenance) {
     try {
       provenanceRecord = await serverOptions.contributorProvenance.compareAndSwap(candidate.directory, 0, {
         kind: 'contributor-fork',
@@ -5848,17 +5868,17 @@ if (contributorFork && contributorSource && serverOptions.contributorProvenance)
     }
   }
 
-const upstreamRemote = shouldSetUpstream
+  const upstreamRemote = shouldSetUpstream
     ? String(input?.upstreamRemote || inferredUpstream?.remote || '').trim()
     : '';
 
-const upstreamBranch = shouldSetUpstream
+  const upstreamBranch = shouldSetUpstream
     ? String(input?.upstreamBranch || inferredUpstream?.branch || '').trim()
     : '';
 
-let bootstrapStatus;
+  let bootstrapStatus;
 
-try {
+  try {
     bootstrapStatus = await setWorktreeBootstrapState(
       candidate.directory,
       WORKTREE_BOOTSTRAP_PENDING,
@@ -5873,9 +5893,9 @@ try {
     bootstrapStatus = error.bootstrapStatus;
   }
 
-if (bootstrapStatus === null) throw new TypeError('Missing worktree bootstrap state');
+  if (bootstrapStatus === null) throw new TypeError('Missing worktree bootstrap state');
 
-if (bootstrapStatus.status === WORKTREE_BOOTSTRAP_PENDING) {
+  if (bootstrapStatus.status === WORKTREE_BOOTSTRAP_PENDING) {
     queueWorktreeBootstrap({
       directory: candidate.directory,
       projectDirectory: context.requestedDirectory,
@@ -5895,11 +5915,11 @@ if (bootstrapStatus.status === WORKTREE_BOOTSTRAP_PENDING) {
     });
   }
 
-const headResult = await runGitCommand(candidate.directory, ['rev-parse', 'HEAD']);
+  const headResult = await runGitCommand(candidate.directory, ['rev-parse', 'HEAD']);
 
-const head = String(headResult.stdout || '').trim();
+  const head = String(headResult.stdout || '').trim();
 
-const result: WorktreeCreateResult = {
+  const result: WorktreeCreateResult = {
     head,
     name: candidate.name,
     branch: localBranch,
@@ -5908,7 +5928,7 @@ const result: WorktreeCreateResult = {
     bootstrapStatus,
   };
 
-if (provenanceRecord) {
+  if (provenanceRecord) {
     result.provenance = {
       kind: 'contributor-fork',
       revision: provenanceRecord.revision,
@@ -5917,7 +5937,7 @@ if (provenanceRecord) {
     };
   }
 
-return result;
+  return result;
 }
 
 async function attachGitWorktreeToCandidate(context: WorktreeProjectContext, candidate: WorktreeCandidate, input: WorktreeCreateInput = {}, serverOptions: WorktreeServerOptions = {}) {
@@ -6112,22 +6132,22 @@ export async function createWorktree(directory: string, input: WorktreeCreateInp
     if (bootstrapStatus === null) throw new TypeError('Missing worktree bootstrap state');
     const task = bootstrapStatus.status === WORKTREE_BOOTSTRAP_PENDING
       ? attachGitWorktreeToCandidate(context, candidate, preparedInput, attachOptions).catch(async (error) => {
-      const failureCode = bootstrapFailureCode(
-        error,
-        isFilenameTooLongError(error instanceof Error ? error.message : error),
-      );
-      await setWorktreeBootstrapState(
-        candidate.directory,
-        WORKTREE_BOOTSTRAP_FAILED,
-        WORKTREE_BOOTSTRAP_PHASE_DIRECTORY_CREATED,
-        worktreeBootstrapFailureMessage(failureCode)
+        const failureCode = bootstrapFailureCode(
+          error,
+          isFilenameTooLongError(error instanceof Error ? error.message : error),
+        );
+        await setWorktreeBootstrapState(
+          candidate.directory,
+          WORKTREE_BOOTSTRAP_FAILED,
+          WORKTREE_BOOTSTRAP_PHASE_DIRECTORY_CREATED,
+          worktreeBootstrapFailureMessage(failureCode)
           ?? 'Worktree creation failed. Inspect the checkout and repair it before use.',
-        undefined,
-        failureCode,
-        serverOptions.bootstrapStore,
-      ).catch(() => {});
-      await cleanupFailedFastWorktreeCreate(context, candidate, serverOptions.bootstrapStore);
-      console.warn('Background worktree creation failed:', error instanceof Error ? error.message : String(error));
+          undefined,
+          failureCode,
+          serverOptions.bootstrapStore,
+        ).catch(() => { });
+        await cleanupFailedFastWorktreeCreate(context, candidate, serverOptions.bootstrapStore);
+        console.warn('Background worktree creation failed:', error instanceof Error ? error.message : String(error));
       })
       : null;
     if (task) trackWorktreeBootstrapTask(candidate.directory, task);
@@ -6590,49 +6610,44 @@ export async function teardownWorktree(directory: string, input: WorktreeRemoval
   return true;
 }
 
-export async function removeWorktree(directory: string, input: WorktreeRemovalInput = {}, { bootstrapStore, removalWorkers }: BootstrapOptions & {
-  removalWorkers?: {
-    acquire: (directory: string, leaseId: string) => Promise<unknown>;
-    release: (leaseId: string) => Promise<void>;
-  };
-} = {}) {
-const targetDirectory = input?.directory === undefined ? undefined : normalizeDirectoryPath(input.directory);
+export async function removeWorktree(
+  directory: string,
+  input: WorktreeRemovalInput = {},
+  { bootstrapStore, removalWorkers }: BootstrapOptions & { removalWorkers?: WorktreeLeaseControl } = {},
+) {
+  const targetDirectory = input?.directory === undefined ? undefined : normalizeDirectoryPath(input.directory);
 
-if (!targetDirectory) {
+  if (!targetDirectory) {
     throw new Error('Worktree directory is required');
   }
 
-const targetCanonical = await canonicalPath(targetDirectory);
+  const targetCanonical = await canonicalPath(targetDirectory);
 
-if (input?.cancelSetup === true) await cancelWorktreeSetup(targetDirectory);
+  if (input?.cancelSetup === true) await cancelWorktreeSetup(targetDirectory);
 
-await waitForActiveWorktreeBootstrap(targetDirectory);
+  await waitForActiveWorktreeBootstrap(targetDirectory);
 
-await waitForActiveWorktreeBootstrap(targetCanonical);
+  await waitForActiveWorktreeBootstrap(targetCanonical);
 
-const context = await resolveWorktreeProjectContext(directory, { tolerateWorktreeRootConfigError: true });
+  const context = await resolveWorktreeProjectContext(directory, { tolerateWorktreeRootConfigError: true });
 
-const deleteLocalBranch = input?.deleteLocalBranch === true;
+  const deleteLocalBranch = input?.deleteLocalBranch === true;
 
-const primaryCanonical = await canonicalPath(context.primaryWorktree);
+  const primaryCanonical = await canonicalPath(context.primaryWorktree);
 
-if (targetCanonical === primaryCanonical) {
+  if (targetCanonical === primaryCanonical) {
     throw new Error('Cannot remove the primary workspace');
   }
 
-const worktreeRootCanonical = await canonicalPath(context.worktreeRoot);
+  const worktreeRootCanonical = await canonicalPath(context.worktreeRoot);
 
-const defaultWorktreeRootCanonical = context.defaultWorktreeRoot
-  ? await canonicalPath(context.defaultWorktreeRoot)
-  : null;
-
-const legacyWorktreeRootCanonical = context.legacyWorktreeRoot
-    ? await canonicalPath(context.legacyWorktreeRoot)
+  const defaultWorktreeRootCanonical = context.defaultWorktreeRoot
+    ? await canonicalPath(context.defaultWorktreeRoot)
     : null;
 
-const entries = await listWorktreeEntries(context.primaryWorktree);
+  const entries = await listWorktreeEntries(context.primaryWorktree);
 
-const matchedEntry = await (async () => {
+  const matchedEntry = await (async () => {
     for (const entry of entries) {
       if (!entry?.worktree) {
         continue;
@@ -6645,48 +6660,41 @@ const matchedEntry = await (async () => {
     return null;
   })();
 
-const removeManagedOrphan = async ({ registered }) => {
-  // The data-dir root is ours alone, so any leftover inside it may go. A
-  // configured worktreeDirectory can be shared (".." is the repository's
-  // parent, holding sibling projects), so there only a directory git had
-  // registered as this project's worktree is deleted; an unregistered one
-  // could be anything.
-  const insideDefaultRoot = defaultWorktreeRootCanonical !== null
-   && targetCanonical !== defaultWorktreeRootCanonical
-   && isInsideOrSameDirectory(defaultWorktreeRootCanonical, targetCanonical);
-  const insideConfiguredRoot = targetCanonical !== worktreeRootCanonical
-   && isInsideOrSameDirectory(worktreeRootCanonical, targetCanonical);
-  const isManagedOrphan = insideDefaultRoot || (registered && insideConfiguredRoot);
+  const removeManagedOrphan = async ({ registered }: { registered: boolean }) => {
+    const insideDefaultRoot = defaultWorktreeRootCanonical !== null
+      && targetCanonical !== defaultWorktreeRootCanonical
+      && isInsideOrSameDirectory(defaultWorktreeRootCanonical, targetCanonical);
+    const insideConfiguredRoot = targetCanonical !== worktreeRootCanonical
+      && isInsideOrSameDirectory(worktreeRootCanonical, targetCanonical);
+    const isManagedOrphan = insideDefaultRoot || (registered && insideConfiguredRoot);
 
-  await clearWorktreeBootstrapState(targetDirectory, bootstrapStore);
-  const targetExists = await checkPathExists(targetDirectory);
-  if (targetExists && isManagedOrphan) {
-   await removeBusyDirectory(targetDirectory);
-  }
-  // A removal git abandoned halfway leaves `.git/worktrees/<name>` without
-  // its gitdir; prune drops that metadata so it cannot linger.
-  await runGitCommand(context.primaryWorktree, ['worktree', 'prune']);
- };
+    await clearWorktreeBootstrapState(targetDirectory, bootstrapStore);
+    const targetExists = await checkPathExists(targetDirectory);
+    if (targetExists && isManagedOrphan) {
+      await removeBusyDirectory(targetDirectory);
+    }
+    await runGitCommand(context.primaryWorktree, ['worktree', 'prune']);
+  };
 
-if (!matchedEntry?.worktree) {
+  if (!matchedEntry?.worktree) {
     await removeManagedOrphan({ registered: false });
     return true;
   }
 
-await runWorktreeTeardown(matchedEntry.worktree, input?.teardownCommand, input?.isContributorCheckout);
+  await runWorktreeTeardown(matchedEntry.worktree, input?.teardownCommand, input?.isContributorCheckout);
 
-const leaseId = process.platform === 'win32' && removalWorkers && await checkPathExists(matchedEntry.worktree) ? randomUUID() : null;
-const settleRemoval = trackWorktreeRemoval(targetCanonical);
+  const leaseId = process.platform === 'win32' && removalWorkers && await checkPathExists(matchedEntry.worktree) ? randomUUID() : null;
+  const settleRemoval = trackWorktreeRemoval(targetCanonical);
 
-const releaseInstance = () => disposeWorktreeInstanceBestEffort(input?.disposeInstance, matchedEntry.worktree);
-let releaseLease = leaseId !== null;
+  const releaseInstance = () => disposeWorktreeInstanceBestEffort(input?.disposeInstance, matchedEntry.worktree);
+  let releaseLease = leaseId !== null;
 
-try {
+  try {
     if (leaseId && removalWorkers) {
       try {
         await removalWorkers.acquire(matchedEntry.worktree, leaseId);
       } catch (error) {
-        if (error?.releaseNotNeeded === true) releaseLease = false;
+        if (hasErrorFields(error) && 'releaseNotNeeded' in error && error.releaseNotNeeded === true) releaseLease = false;
         throw error;
       }
     }
@@ -6722,9 +6730,9 @@ try {
     settleRemoval();
   }
 
-await publishWorktreeTopologyChange(context.primaryWorktree);
+  await publishWorktreeTopologyChange(context.primaryWorktree);
 
-if (deleteLocalBranch) {
+  if (deleteLocalBranch) {
     const branchName = cleanBranchName(String(matchedEntry.branchRef || matchedEntry.branch || '').trim());
     if (branchName && !(await isBranchKeptOnWorktreeRemoval(context.primaryWorktree, branchName))) {
       await runGitCommandOrThrow(
@@ -6735,7 +6743,7 @@ if (deleteLocalBranch) {
     }
   }
 
-return true;
+  return true;
 }
 
 const RUN_SNAPSHOT_REF_PATTERN = /^refs\/openchamber\/runs\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
@@ -6772,62 +6780,57 @@ const readWorktreeStateTree = async (worktreeDirectory: string) => {
   }
 };
 
-const fingerprintWorktreeRestore = async (directory) => {
- const { head, tree } = await readWorktreeStateTree(directory);
- const env = await buildGitEnv(directory);
- const readBytes = async (args) => {
-  const { stdout } = await execFileAsync(getGitBinary(), args, {
-   cwd: directory, env, encoding: 'buffer', windowsHide: true, maxBuffer: 20 * 1024 * 1024,
-  });
-  return stdout;
- };
- const [index, unmerged, status] = await Promise.all([
-  readBytes(['ls-files', '--stage', '-z']),
-  readBytes(['ls-files', '--unmerged', '-z']),
-  readBytes(['status', '--porcelain=v2', '--untracked-files=all', '-z']),
- ]);
- const digest = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
- return { head, tree, index: digest(index), unmerged: digest(unmerged), status: digest(status), conflicts: unmerged.length > 0 };
-};
-
-// Restore runs in a checkout created for it, after the project's setup commands.
-// A setup command that writes a file the archive also holds, with the same
-// content, would make git refuse the archive; that copy is dropped so the archived
-// file comes back. A copy with other content is left for git to refuse.
-const clearSetupCopiesOfArchivedFiles = async (directory, archive) => {
- const added = await runGitCommandOrThrow(directory, ['diff', '--name-only', '-z', '--no-renames', '--diff-filter=A', archive.head, archive.commit], 'Failed to read the worktree archive');
- const archivedPaths = new Set(added.stdout.split('\0').filter(Boolean));
- if (archivedPaths.size === 0) return;
- const untracked = await runGitCommandOrThrow(directory, ['ls-files', '--others', '--exclude-standard', '-z'], 'Failed to read the restored checkout');
- for (const file of untracked.stdout.split('\0')) {
-  if (!archivedPaths.has(file)) continue;
-  const [archived, written] = await Promise.all([
-   runGitCommand(directory, ['rev-parse', '--verify', '--quiet', `${archive.commit}:${file}`]),
-   runGitCommand(directory, ['hash-object', '--', file]),
+const fingerprintWorktreeRestore = async (directory: string): Promise<RestoreFingerprint> => {
+  const { head, tree } = await readWorktreeStateTree(directory);
+  const env = await buildGitEnv(directory);
+  const readBytes = async (args: string[]) => {
+    const { stdout } = await execFileAsync(getGitBinary(), args, {
+      cwd: directory, env, encoding: 'buffer', windowsHide: true, maxBuffer: 20 * 1024 * 1024,
+    });
+    return stdout;
+  };
+  const [index, unmerged, status] = await Promise.all([
+    readBytes(['ls-files', '--stage', '-z']),
+    readBytes(['ls-files', '--unmerged', '-z']),
+    readBytes(['status', '--porcelain=v2', '--untracked-files=all', '-z']),
   ]);
-  if (archived.success && written.success && archived.stdout.trim() === written.stdout.trim()) {
-   await fsp.rm(path.join(directory, file), { force: true });
+  const digest = (bytes: Buffer) => crypto.createHash('sha256').update(bytes).digest('hex');
+  return { head, tree, index: digest(index), unmerged: digest(unmerged), status: digest(status), conflicts: unmerged.length > 0 };
+};
+
+const clearSetupCopiesOfArchivedFiles = async (directory: string, archive: { head: string; commit: string }) => {
+  const added = await runGitCommandOrThrow(directory, ['diff', '--name-only', '-z', '--no-renames', '--diff-filter=A', archive.head, archive.commit], 'Failed to read the worktree archive');
+  const archivedPaths = new Set(added.stdout.split('\0').filter(Boolean));
+  if (archivedPaths.size === 0) return;
+  const untracked = await runGitCommandOrThrow(directory, ['ls-files', '--others', '--exclude-standard', '-z'], 'Failed to read the restored checkout');
+  for (const file of untracked.stdout.split('\0')) {
+    if (!archivedPaths.has(file)) continue;
+    const [archived, written] = await Promise.all([
+      runGitCommand(directory, ['rev-parse', '--verify', '--quiet', `${archive.commit}:${file}`]),
+      runGitCommand(directory, ['hash-object', '--', file]),
+    ]);
+    if (archived.success && written.success && archived.stdout.trim() === written.stdout.trim()) {
+      await fsp.rm(path.join(directory, file), { force: true });
+    }
   }
- }
 };
 
-const applyWorktreeArchiveSnapshot = async (directory, archive) => {
- const trees = await runGitCommandOrThrow(directory, ['rev-parse', `${archive.commit}^{tree}`, `${archive.head}^{tree}`], 'Failed to read the worktree archive');
- const [snapshotTree, headTree] = trees.stdout.trim().split('\n');
- if (snapshotTree === headTree) return false;
- await clearSetupCopiesOfArchivedFiles(directory, archive);
- const env = { ...(await buildGitEnv(directory)), ...SNAPSHOT_IDENTITY_ENV };
- const applied = await runGitCommand(directory, ['cherry-pick', '--no-commit', archive.commit], { env });
- if (applied.success) {
-  await runGitCommandOrThrow(directory, ['reset', '--quiet'], 'Failed to unstage the restored changes');
-  return false;
- }
- const unmerged = await runGitCommand(directory, ['ls-files', '--unmerged']);
- if (!unmerged.success || !unmerged.stdout.trim())
-  throw worktreeArchiveError(`The archived changes could not be applied (${applied.message || 'git refused'}). The archive is kept.`, 'WORKTREE_ARCHIVE_NOT_APPLIED', 409);
- return true;
+const applyWorktreeArchiveSnapshot = async (directory: string, archive: { head: string; commit: string }) => {
+  const trees = await runGitCommandOrThrow(directory, ['rev-parse', `${archive.commit}^{tree}`, `${archive.head}^{tree}`], 'Failed to read the worktree archive');
+  const [snapshotTree, headTree] = trees.stdout.trim().split('\n');
+  if (snapshotTree === headTree) return false;
+  await clearSetupCopiesOfArchivedFiles(directory, archive);
+  const env = { ...(await buildGitEnv(directory)), ...SNAPSHOT_IDENTITY_ENV };
+  const applied = await runGitCommand(directory, ['cherry-pick', '--no-commit', archive.commit], { env });
+  if (applied.success) {
+    await runGitCommandOrThrow(directory, ['reset', '--quiet'], 'Failed to unstage the restored changes');
+    return false;
+  }
+  const unmerged = await runGitCommand(directory, ['ls-files', '--unmerged']);
+  if (!unmerged.success || !unmerged.stdout.trim())
+    throw worktreeArchiveError(`The archived changes could not be applied (${applied.message || 'git refused'}). The archive is kept.`, 'WORKTREE_ARCHIVE_NOT_APPLIED', 409);
+  return true;
 };
-
 const commitSnapshot = async (directory: string, { ref, message, oldValue, head, tree }: SnapshotOptions & { head: string; tree: string }) => {
   const env = { ...(await buildGitEnv(directory)), ...SNAPSHOT_IDENTITY_ENV };
   const commit = await runGitCommand(directory, ['commit-tree', tree, '-p', head, '-m', message], { env });
@@ -6858,10 +6861,10 @@ const WORKTREE_ARCHIVE_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
 
 const worktreeArchiveIdSchema = z.string().trim().regex(WORKTREE_ARCHIVE_ID_PATTERN);
 
-const assertWorktreeArchiveId = (id) => {
- const parsed = worktreeArchiveIdSchema.safeParse(id);
- if (!parsed.success) throw worktreeArchiveError('Invalid worktree archive id', undefined, 400);
- return parsed.data;
+const assertWorktreeArchiveId = (id: WorktreeArchiveInput['id']) => {
+  const parsed = worktreeArchiveIdSchema.safeParse(id);
+  if (!parsed.success) throw worktreeArchiveError('Invalid worktree archive id', undefined, 400);
+  return parsed.data;
 };
 
 const sessionIdListSchema = z.array(z.unknown()).catch([])
@@ -6888,189 +6891,193 @@ const parseWorktreeArchiveMessage = (message: string) => {
   }
 };
 
-const readWorktreeArchives = async (primaryWorktree) => {
- const listing = await runGitCommandOrThrow(primaryWorktree, [
-  'for-each-ref',
-  '--format=%(refname)%00%(objectname)%00%(parent)%00%(contents)%1e',
-  WORKTREE_ARCHIVE_REF_PREFIX,
- ], 'Failed to list worktree archives');
- const branches = await runGitCommand(primaryWorktree, ['for-each-ref', '--format=%(refname:short)', 'refs/heads/']);
- const localBranches = new Set(branches.success ? String(branches.stdout || '').split('\n').map((line) => line.trim()).filter(Boolean) : []);
- return String(listing.stdout || '').split('\x1e').flatMap((chunk) => {
-  const [ref = '', commit = '', head = '', message = ''] = chunk.replace(/^\n/, '').split('\0');
-  if (!ref.startsWith(WORKTREE_ARCHIVE_REF_PREFIX)) return [];
-  const record = parseWorktreeArchiveMessage(message);
-  if (!record) return [];
-  const id = ref.slice(WORKTREE_ARCHIVE_REF_PREFIX.length);
-  if (!WORKTREE_ARCHIVE_ID_PATTERN.test(id)) return [];
-  return [{ id, ref, commit, head: head.split(' ')[0] || '', ...record, branchExists: Boolean(record.branch) && localBranches.has(record.branch) }];
- }).sort((a, b) => b.archivedAt - a.archivedAt);
+const readWorktreeArchives = async (primaryWorktree: string) => {
+  const listing = await runGitCommandOrThrow(primaryWorktree, [
+    'for-each-ref',
+    '--format=%(refname)%00%(objectname)%00%(parent)%00%(contents)%1e',
+    WORKTREE_ARCHIVE_REF_PREFIX,
+  ], 'Failed to list worktree archives');
+  const branches = await runGitCommand(primaryWorktree, ['for-each-ref', '--format=%(refname:short)', 'refs/heads/']);
+  const localBranches = new Set(branches.success ? String(branches.stdout || '').split('\n').map((line) => line.trim()).filter(Boolean) : []);
+  return String(listing.stdout || '').split('\x1e').flatMap((chunk) => {
+    const [ref = '', commit = '', head = '', message = ''] = chunk.replace(/^\n/, '').split('\0');
+    if (!ref.startsWith(WORKTREE_ARCHIVE_REF_PREFIX)) return [];
+    const record = parseWorktreeArchiveMessage(message);
+    if (!record) return [];
+    const id = ref.slice(WORKTREE_ARCHIVE_REF_PREFIX.length);
+    if (!WORKTREE_ARCHIVE_ID_PATTERN.test(id)) return [];
+    return [{ id, ref, commit, head: head.split(' ')[0] || '', ...record, branchExists: Boolean(record.branch) && localBranches.has(record.branch) }];
+  }).sort((a, b) => b.archivedAt - a.archivedAt);
 };
 
-const readWorktreeArchive = async (primaryWorktree, id) => {
- const archiveId = assertWorktreeArchiveId(id);
- const archive = (await readWorktreeArchives(primaryWorktree)).find((entry) => entry.id === archiveId);
- if (!archive) throw worktreeArchiveError('Worktree archive not found', 'WORKTREE_ARCHIVE_NOT_FOUND', 404);
- return archive;
+const readWorktreeArchive = async (primaryWorktree: string, id: string) => {
+  const archiveId = assertWorktreeArchiveId(id);
+  const archive = (await readWorktreeArchives(primaryWorktree)).find((entry) => entry.id === archiveId);
+  if (!archive) throw worktreeArchiveError('Worktree archive not found', 'WORKTREE_ARCHIVE_NOT_FOUND', 404);
+  return archive;
 };
 
-const resolveWorktreeArchiveProjectContext = async (directory) => {
- try {
-  return await resolveWorktreeProjectContext(directory, { tolerateWorktreeRootConfigError: true });
- } catch (error) {
-  throw worktreeArchiveError(
-   error instanceof Error ? error.message : 'The directory does not resolve to a Git checkout',
-   undefined,
-   400,
-  );
- }
+const resolveWorktreeArchiveProjectContext = async (directory: string) => {
+  try {
+    return await resolveWorktreeProjectContext(directory, { tolerateWorktreeRootConfigError: true });
+  } catch (error) {
+    throw worktreeArchiveError(
+      error instanceof Error ? error.message : 'The directory does not resolve to a Git checkout',
+      undefined,
+      400,
+    );
+  }
 };
 
-export async function listWorktreeArchives(directory) {
- const context = await resolveWorktreeArchiveProjectContext(directory);
- return readWorktreeArchives(context.primaryWorktree);
-}
+export async function listWorktreeArchives(directory: string) {
+  const context = await resolveWorktreeArchiveProjectContext(directory);
+  return readWorktreeArchives(context.primaryWorktree);
+};
 
 const worktreeArchivesInFlight = new Set<string>();
 
-const worktreeArchiveError = (message, code, status) => Object.assign(
- new Error(message),
- code === undefined ? {} : { code },
- status === undefined ? {} : { status },
-);
+const worktreeArchiveError = (message: string, code?: string, status?: number) => {
+  const error: Error & { code?: string; status?: number } = new Error(message);
+  if (code !== undefined) error.code = code;
+  if (status !== undefined) error.status = status;
+  return error;
+};
 
-export async function archiveWorktree(directory, input = {}, options = {}) {
- const id = assertWorktreeArchiveId(input?.id);
- const worktreeDirectory = normalizeDirectoryPath(input?.directory);
- if (!worktreeDirectory) throw worktreeArchiveError('Worktree directory is required', undefined, 400);
- const { bootstrapStore, worktreeWorkers, archiveSessions } = options ?? {};
- if (!archiveSessions) {
-  const context = await resolveWorktreeProjectContext(directory, { tolerateWorktreeRootConfigError: true });
+const isWorktreeArchiveOwnerRecord = (value: unknown): value is WorktreeArchiveCapturedOwner =>
+  isObjectValue(value)
+  && 'key' in value && isObjectValue(value.key)
+  && 'hostProjectId' in value.key && isPrimitiveString(value.key.hostProjectId)
+  && 'archiveId' in value.key && isPrimitiveString(value.key.archiveId)
+  && 'claimId' in value && isPrimitiveString(value.claimId)
+  && (!('binding' in value) || value.binding === undefined || isObjectValue(value.binding));
+
+export async function archiveWorktree(
+  directory: string,
+  input: WorktreeArchiveInput = {},
+  options: BootstrapOptions & { worktreeWorkers?: WorktreeLeaseControl | undefined; archiveSessions?: WorktreeArchiveSessionService | undefined } = {},
+) {
+  const id = assertWorktreeArchiveId(input?.id);
+  const worktreeDirectory = normalizeDirectoryPath(input?.directory);
+  if (!worktreeDirectory) throw worktreeArchiveError('Worktree directory is required', undefined, 400);
+  const { bootstrapStore, worktreeWorkers, archiveSessions } = options ?? {};
+  if (!archiveSessions) {
+    const context = await resolveWorktreeProjectContext(directory, { tolerateWorktreeRootConfigError: true });
+    const targetCanonical = await canonicalPath(worktreeDirectory);
+    return archiveRegisteredWorktree({ directory, id, worktreeDirectory, targetCanonical, context, input, options });
+  }
+  if (worktreeWorkers && (!(worktreeWorkers.acquire instanceof Function) || !(worktreeWorkers.release instanceof Function))) {
+    throw worktreeArchiveError('Worker lifecycle control is not available', undefined, 501);
+  }
+  if (!(archiveSessions?.captureWorktreeArchive instanceof Function)
+    || !(archiveSessions?.prepareWorktreeArchiveRemoval instanceof Function)
+    || !(archiveSessions?.finishWorktreeArchive instanceof Function)
+    || !(archiveSessions?.rollbackWorktreeArchive instanceof Function)
+    || !(archiveSessions?.discardWorktreeArchive instanceof Function)) {
+    throw worktreeArchiveError('Host archive authority is not available', 'SERVICE_UNAVAILABLE', 503);
+  }
+  const context = await resolveWorktreeArchiveProjectContext(directory);
   const targetCanonical = await canonicalPath(worktreeDirectory);
-  return archiveRegisteredWorktree({ directory, id, worktreeDirectory, targetCanonical, context, input, options });
- }
- if (worktreeWorkers && (!(worktreeWorkers.acquire instanceof Function) || !(worktreeWorkers.release instanceof Function))) {
-  throw worktreeArchiveError('Worker lifecycle control is not available', undefined, 501);
- }
- if (!(archiveSessions?.captureWorktreeArchive instanceof Function)
-  || !(archiveSessions?.prepareWorktreeArchiveRemoval instanceof Function)
-  || !(archiveSessions?.finishWorktreeArchive instanceof Function)
-  || !(archiveSessions?.rollbackWorktreeArchive instanceof Function)
-  || !(archiveSessions?.discardWorktreeArchive instanceof Function)) {
-  throw worktreeArchiveError('Host archive authority is not available', 'SERVICE_UNAVAILABLE', 503);
- }
- const context = await resolveWorktreeArchiveProjectContext(directory);
- const targetCanonical = await canonicalPath(worktreeDirectory);
- if (targetCanonical === await canonicalPath(context.primaryWorktree)) {
-  throw worktreeArchiveError('Cannot archive the primary workspace', undefined, 400);
- }
- // Only a checkout git registers here: the removal below would otherwise
- // treat the folder as a leftover and delete it without a trace in git.
- if (!(await findRegisteredWorktree(context.primaryWorktree, targetCanonical))) {
-  throw worktreeArchiveError('Not a worktree of this repository', undefined, 400);
- }
- if ((await readWorktreeArchives(context.primaryWorktree)).some((entry) => entry.id === id)) {
-  throw worktreeArchiveError('This worktree archive id already exists', undefined, 400);
- }
- if (worktreeArchivesInFlight.has(targetCanonical)) {
-  throw worktreeArchiveError('This worktree is already being archived', 'WORKTREE_ARCHIVE_IN_PROGRESS', 409);
- }
- worktreeArchivesInFlight.add(targetCanonical);
- // The Host generates the id before the Agent Service sees it, so a lost 201
- // still leaves the host holding the id it must release.
- const leaseId = randomUUID();
- let releaseLease = true;
- try {
-  if (worktreeWorkers) await worktreeWorkers.acquire(worktreeDirectory, leaseId);
-  // A new worktree's files land in the background: a snapshot taken before
-  // they do records every missing file as deleted. A failure while fetching
-  // submodules or LFS objects comes after every file landed, so that worktree
-  // archives like any other.
-  await waitForActiveWorktreeBootstrap(worktreeDirectory);
-  const bootstrap = worktreeBootstrapState.get(await toCanonicalBootstrapStateKey(worktreeDirectory));
-  if (bootstrap?.status === WORKTREE_BOOTSTRAP_FAILED && !bootstrap.hydration) {
-   throw worktreeArchiveError(
-    'The worktree did not finish setting up, so it cannot be archived. Delete it instead.',
-    'WORKTREE_BOOTSTRAP_FAILED',
-    409,
-   );
+  if (targetCanonical === await canonicalPath(context.primaryWorktree)) {
+    throw worktreeArchiveError('Cannot archive the primary workspace', undefined, 400);
   }
-
-  const entry = await findRegisteredWorktree(context.primaryWorktree, targetCanonical);
-  const folderGone = entry?.prunable === true && !(await checkPathExists(worktreeDirectory));
-  let head = '';
-  let branch = '';
-  if (folderGone) {
-   head = entry.head || '';
-   branch = entry.branch || '';
-  } else {
-   const headResult = await runGitCommand(worktreeDirectory, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
-   branch = headResult.success ? String(headResult.stdout || '').trim() : '';
-   head = (await runGitCommand(worktreeDirectory, ['rev-parse', 'HEAD'])).stdout?.trim() || '';
+  if (!(await findRegisteredWorktree(context.primaryWorktree, targetCanonical))) {
+    throw worktreeArchiveError('Not a worktree of this repository', undefined, 400);
   }
-  const record = {
-   path: worktreeDirectory,
-   branch,
-   title: (branch ? toTaskTitle(await readGitConfigValue(context.primaryWorktree, `branch.${branch}.description`)) : '')
-    || toTaskTitle(z.string().catch('').parse(input?.title)),
-   archivedAt: Date.now(),
-   sessionIds: sessionIdListSchema.parse(input?.sessionIds),
-  };
-  const ref = `${WORKTREE_ARCHIVE_REF_PREFIX}${id}`;
-  const message = `${WORKTREE_ARCHIVE_SUBJECT}\n\n${JSON.stringify(record)}`;
-  const snapshot = folderGone
-   ? await commitSnapshot(context.primaryWorktree, {
-    ref,
-    message,
-    oldValue: '',
-    head: entry.head,
-    tree: (await runGitCommandOrThrow(context.primaryWorktree, ['rev-parse', `${entry.head}^{tree}`], 'Failed to read the worktree head')).stdout.trim(),
-   })
-   : await writeWorktreeSnapshot(worktreeDirectory, { ref, message, oldValue: '' });
-  let owner;
+  if ((await readWorktreeArchives(context.primaryWorktree)).some((entry) => entry.id === id)) {
+    throw worktreeArchiveError('This worktree archive id already exists', undefined, 400);
+  }
+  if (worktreeArchivesInFlight.has(targetCanonical)) {
+    throw worktreeArchiveError('This worktree is already being archived', 'WORKTREE_ARCHIVE_IN_PROGRESS', 409);
+  }
+  worktreeArchivesInFlight.add(targetCanonical);
+  const leaseId = randomUUID();
+  let releaseLease = true;
   try {
-   const branchResult = branch ? await runGitCommand(context.primaryWorktree, ['rev-parse', '--verify', `refs/heads/${branch}`]) : null;
-   if (branch && !branchResult.success) throw new Error('Could not resolve the archive branch');
-   owner = await archiveSessions.captureWorktreeArchive({
-    projectDirectory: directory, worktreeDirectory: targetCanonical, archiveId: id,
-    archiveRef: ref, snapshotCommit: snapshot.commit, claimId: leaseId,
-    branchName: branch, branchOid: branchResult?.stdout?.trim() || null, archivedAt: record.archivedAt,
-   });
-   await archiveSessions.prepareWorktreeArchiveRemoval(owner);
-   await removeWorktree(directory, { directory: worktreeDirectory, deleteLocalBranch: false }, { bootstrapStore });
+    if (worktreeWorkers) await worktreeWorkers.acquire(worktreeDirectory, leaseId);
+    await waitForActiveWorktreeBootstrap(worktreeDirectory);
+    const bootstrap = worktreeBootstrapState.get(await toCanonicalBootstrapStateKey(worktreeDirectory));
+    if (bootstrap?.status === WORKTREE_BOOTSTRAP_FAILED && !bootstrap.hydration) {
+      throw worktreeArchiveError(
+        'The worktree did not finish setting up, so it cannot be archived. Delete it instead.',
+        'WORKTREE_BOOTSTRAP_FAILED',
+        409,
+      );
+    }
+
+    const entry = await findRegisteredWorktree(context.primaryWorktree, targetCanonical);
+    const folderGone = entry?.prunable === true && !(await checkPathExists(worktreeDirectory));
+    let branch = '';
+    if (folderGone) {
+      branch = entry.branch || '';
+    } else {
+      const headResult = await runGitCommand(worktreeDirectory, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
+      branch = headResult.success ? String(headResult.stdout || '').trim() : '';
+    }
+    const record = {
+      path: worktreeDirectory,
+      branch,
+      title: (branch ? toTaskTitle(await readGitConfigValue(context.primaryWorktree, `branch.${branch}.description`)) : '')
+        || toTaskTitle(z.string().catch('').parse(input?.title)),
+      archivedAt: Date.now(),
+      sessionIds: sessionIdListSchema.parse(input?.sessionIds),
+    };
+    const ref = `${WORKTREE_ARCHIVE_REF_PREFIX}${id}`;
+    const message = `${WORKTREE_ARCHIVE_SUBJECT}\n\n${JSON.stringify(record)}`;
+    const entryHead = entry?.head ?? '';
+    const snapshot = folderGone
+      ? await commitSnapshot(context.primaryWorktree, {
+        ref,
+        message,
+        oldValue: '',
+        head: entryHead,
+        tree: (await runGitCommandOrThrow(context.primaryWorktree, ['rev-parse', `${entryHead}^{tree}`], 'Failed to read the worktree head')).stdout.trim(),
+      })
+      : await writeWorktreeSnapshot(worktreeDirectory, { ref, message, oldValue: '' });
+    let owner: WorktreeArchiveCapturedOwner | undefined;
+    try {
+      const branchResult = branch ? await runGitCommand(context.primaryWorktree, ['rev-parse', '--verify', `refs/heads/${branch}`]) : null;
+      if (branchResult && !branchResult.success) throw new Error('Could not resolve the archive branch');
+      owner = await archiveSessions.captureWorktreeArchive({
+        projectDirectory: directory, worktreeDirectory: targetCanonical, archiveId: id,
+        archiveRef: ref, snapshotCommit: snapshot.commit, claimId: leaseId,
+        branchName: branch, branchOid: branchResult?.stdout?.trim() || null, archivedAt: record.archivedAt,
+      });
+      await archiveSessions.prepareWorktreeArchiveRemoval(owner);
+      await removeWorktree(directory, { directory: worktreeDirectory, deleteLocalBranch: false }, { bootstrapStore });
+    } catch (error) {
+      const errorOwner = hasErrorFields(error) && 'worktreeArchiveOwner' in error && isWorktreeArchiveOwnerRecord(error.worktreeArchiveOwner)
+        ? error.worktreeArchiveOwner
+        : undefined;
+      owner ??= errorOwner;
+      const snapshotTree = (await runGitCommand(context.primaryWorktree, ['rev-parse', `${snapshot.commit}^{tree}`])).stdout?.trim();
+      const intact = await checkPathExists(worktreeDirectory)
+        && await findRegisteredWorktree(context.primaryWorktree, targetCanonical)
+        && (await readWorktreeStateTree(worktreeDirectory).catch(() => null))?.tree === snapshotTree;
+      if (owner && !errorOwner) await archiveSessions.rollbackWorktreeArchive(owner, !intact);
+      if (intact) {
+        const removed = await runGitCommand(context.primaryWorktree, ['update-ref', '-d', ref, snapshot.commit]);
+        if (removed.success && owner) await archiveSessions.discardWorktreeArchive(owner);
+        throw error;
+      }
+      throw worktreeArchiveError(
+        `The worktree folder could not be removed completely (${error instanceof Error ? error.message : String(error)}). It is archived; restore it once nothing holds the folder.`,
+        'WORKTREE_ARCHIVE_PARTIAL', 409,
+      );
+    }
+    const binding = await archiveSessions.finishWorktreeArchive(owner);
+    const boundSet = new Set((binding.sessions || []).map((s) => isPrimitiveString(s) ? s : s.sessionId));
+    return {
+      id, ref, commit: snapshot.commit, head: snapshot.head, ...record, branchExists: Boolean(branch),
+      sessionIds: record.sessionIds.filter((sessionId) => boundSet.has(sessionId)),
+      sessionBinding: { status: binding.sessions.length ? 'bound' : 'verified-empty', phase: binding.phase }
+    };
   } catch (error) {
-   owner ??= error?.worktreeArchiveOwner;
-   const snapshotTree = (await runGitCommand(context.primaryWorktree, ['rev-parse', `${snapshot.commit}^{tree}`])).stdout?.trim();
-   const intact = await checkPathExists(worktreeDirectory)
-    && await findRegisteredWorktree(context.primaryWorktree, targetCanonical)
-    && (await readWorktreeStateTree(worktreeDirectory).catch(() => null))?.tree === snapshotTree;
-   if (owner && !error?.worktreeArchiveOwner) await archiveSessions.rollbackWorktreeArchive(owner, !intact);
-   if (intact) {
-    const removed = await runGitCommand(context.primaryWorktree, ['update-ref', '-d', ref, snapshot.commit]);
-    if (removed.success && owner) await archiveSessions.discardWorktreeArchive(owner);
+    if (hasErrorFields(error) && 'releaseNotNeeded' in error && error.releaseNotNeeded === true) releaseLease = false;
     throw error;
-   }
-   throw worktreeArchiveError(
-    `The worktree folder could not be removed completely (${error instanceof Error ? error.message : String(error)}). It is archived; restore it once nothing holds the folder.`,
-    'WORKTREE_ARCHIVE_PARTIAL', 409,
-   );
+  } finally {
+    if (releaseLease && worktreeWorkers) await worktreeWorkers.release(leaseId).catch(() => undefined);
+    worktreeArchivesInFlight.delete(targetCanonical);
   }
-  const binding = await archiveSessions.finishWorktreeArchive(owner);
-  const boundSet = new Set((binding.sessions || []).map((s) => typeof s === 'string' ? s : s.sessionId));
-  return {
-   id, ref, commit: snapshot.commit, head: snapshot.head, ...record, branchExists: Boolean(branch),
-   sessionIds: record.sessionIds.filter((id) => boundSet.has(id)),
-   sessionBinding: { status: binding.sessions.length ? 'bound' : 'verified-empty', phase: binding.phase }
-  };
- } catch (error) {
-  // A duplicate lease id names a lease this archive never created; releasing
-  // it would end someone else's hold.
-  if (error?.releaseNotNeeded === true) releaseLease = false;
-  throw error;
- } finally {
-  if (releaseLease && worktreeWorkers) await worktreeWorkers.release(leaseId).catch(() => undefined);
-  worktreeArchivesInFlight.delete(targetCanonical);
- }
 }
 
 const findRegisteredWorktree = async (primaryWorktree: string, targetCanonical: string) => {
@@ -7135,212 +7142,265 @@ const archiveRegisteredWorktree = async ({ directory, id, worktreeDirectory, tar
   return { id, ref, commit: snapshot.commit, head: snapshot.head, ...record, branchExists: Boolean(branch) };
 };
 
-const prospectiveWorktreeRestore = async (directory, archive, before) => {
- const temporary = await fsp.mkdtemp(path.join(os.tmpdir(), 'openchamber-restore-'));
- const checkout = path.join(temporary, 'checkout');
- let linked = false;
- try {
-  const env = await buildGitEnv(directory);
-  const flags = await execFileAsync(getGitBinary(), ['ls-files', '-v', '-z'], { cwd: directory, env, encoding: 'buffer', windowsHide: true, maxBuffer: 20 * 1024 * 1024 });
-  if (flags.stdout.toString('utf8').split('\0').some((entry) => entry && entry[0] !== 'H'))
-   throw worktreeArchiveError('The restore target has unsupported sparse or index state. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
-  await runGitCommandOrThrow(directory, ['worktree', 'add', '--detach', checkout, before.head], 'Failed to create restore comparison checkout');
-  linked = true;
-  for (const entry of await fsp.readdir(checkout)) {
-   if (entry !== '.git') await fsp.rm(path.join(checkout, entry), { recursive: true, force: true });
+const prospectiveWorktreeRestore = async (
+  directory: string,
+  archive: { head: string; commit: string },
+  before: RestoreFingerprint,
+) => {
+  const temporary = await fsp.mkdtemp(path.join(os.tmpdir(), 'openchamber-restore-'));
+  const checkout = path.join(temporary, 'checkout');
+  let linked = false;
+  try {
+    const env = await buildGitEnv(directory);
+    const flags = await execFileAsync(getGitBinary(), ['ls-files', '-v', '-z'], { cwd: directory, env, encoding: 'buffer', windowsHide: true, maxBuffer: 20 * 1024 * 1024 });
+    if (flags.stdout.toString('utf8').split('\0').some((entry) => entry && entry[0] !== 'H'))
+      throw worktreeArchiveError('The restore target has unsupported sparse or index state. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+    await runGitCommandOrThrow(directory, ['worktree', 'add', '--detach', checkout, before.head], 'Failed to create restore comparison checkout');
+    linked = true;
+    for (const entry of await fsp.readdir(checkout)) {
+      if (entry !== '.git') await fsp.rm(path.join(checkout, entry), { recursive: true, force: true });
+    }
+    for (const entry of await fsp.readdir(directory)) {
+      if (entry !== '.git') await fsp.cp(path.join(directory, entry), path.join(checkout, entry), { recursive: true, dereference: false, preserveTimestamps: true, verbatimSymlinks: true });
+    }
+    const indexPath = async (cwd: string) => {
+      const result = await runGitCommandOrThrow(cwd, ['rev-parse', '--git-path', 'index'], 'Failed to resolve restore index');
+      return path.resolve(cwd, result.stdout.trim());
+    };
+    await fsp.copyFile(await indexPath(directory), await indexPath(checkout));
+    const reconstructed = await fingerprintWorktreeRestore(checkout);
+    if (JSON.stringify(reconstructed) !== JSON.stringify(before))
+      throw worktreeArchiveError('The restore target could not be reproduced safely. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+    const conflicts = await applyWorktreeArchiveSnapshot(checkout, archive);
+    const expected = await fingerprintWorktreeRestore(checkout);
+    if (expected.conflicts !== conflicts) throw new Error('Restore comparison conflict state changed');
+    return expected;
+  } finally {
+    if (linked) {
+      await runGitCommand(directory, ['worktree', 'remove', '--force', checkout]).catch(() => undefined);
+      await runGitCommand(directory, ['worktree', 'prune']).catch(() => undefined);
+    }
+    await fsp.rm(temporary, { recursive: true, force: true });
   }
-  for (const entry of await fsp.readdir(directory)) {
-   if (entry !== '.git') await fsp.cp(path.join(directory, entry), path.join(checkout, entry), { recursive: true, dereference: false, preserveTimestamps: true, verbatimSymlinks: true });
-  }
-  const indexPath = async (cwd) => {
-   const result = await runGitCommandOrThrow(cwd, ['rev-parse', '--git-path', 'index'], 'Failed to resolve restore index');
-   return path.resolve(cwd, result.stdout.trim());
-  };
-  await fsp.copyFile(await indexPath(directory), await indexPath(checkout));
-  const reconstructed = await fingerprintWorktreeRestore(checkout);
-  if (JSON.stringify(reconstructed) !== JSON.stringify(before))
-   throw worktreeArchiveError('The restore target could not be reproduced safely. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
-  const conflicts = await applyWorktreeArchiveSnapshot(checkout, archive);
-  const expected = await fingerprintWorktreeRestore(checkout);
-  if (expected.conflicts !== conflicts) throw new Error('Restore comparison conflict state changed');
-  return expected;
- } finally {
-  if (linked) {
-   await runGitCommand(directory, ['worktree', 'remove', '--force', checkout]).catch(() => undefined);
-   await runGitCommand(directory, ['worktree', 'prune']).catch(() => undefined);
-  }
-  await fsp.rm(temporary, { recursive: true, force: true });
- }
-}
-
-export async function restoreWorktreeArchive(directory, input = {}, { archiveSessions } = {}) {
- const archiveId = assertWorktreeArchiveId(input?.id);
- let worktreeDirectory = normalizeDirectoryPath(directory);
- if (!worktreeDirectory) throw worktreeArchiveError('Worktree directory is required', undefined, 400);
- const context = await resolveWorktreeArchiveProjectContext(worktreeDirectory);
- if (!archiveSessions?.prepareWorktreeArchiveRestore) throw worktreeArchiveError('Host archive authority is unavailable', 'WORKTREE_ARCHIVE_AUTHORITY_UNAVAILABLE', 503);
- const resume = input?.recovery?.mode === 'same_target';
- if (resume) {
-  if (!Number.isSafeInteger(input.recovery.revision) || input.recovery.revision <= 0 || !archiveSessions.resolveWorktreeArchivePinnedTarget)
-   throw worktreeArchiveError('Restore revision is invalid', 'WORKTREE_ARCHIVE_TARGET_CHANGED', 409);
-  worktreeDirectory = await archiveSessions.resolveWorktreeArchivePinnedTarget({ projectDirectory: context.primaryWorktree, archiveId, revision: input.recovery.revision });
- }
- const targetDirectory = await fsp.realpath(worktreeDirectory);
- const owner = await archiveSessions.prepareWorktreeArchiveRestore({ projectDirectory: context.primaryWorktree, targetDirectory, archiveId, recovery: resume ? undefined : input?.recovery, expectedRevision: resume ? input.recovery.revision : undefined });
- let cleanup = false;
- try {
-  if (owner?.binding.phase === 'finalizing') {
-   if (owner.binding.sessions.some(item => item.progress !== 'restored'))
-    throw worktreeArchiveError('Archive finalization is incomplete. The binding is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
-   const current = await runGitCommand(context.primaryWorktree, ['rev-parse', '--verify', owner.binding.archiveRef]);
-   if (owner.binding.restoreCasCompleted) {
-    if (current.success) throw worktreeArchiveError('Archive finalization outcome is ambiguous. The binding is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
-    cleanup = true;
-    return { id: input.id, conflicts: JSON.parse(owner.binding.expectedFingerprint).conflicts, sessionBinding: { status: 'bound', phase: 'finalizing' } };
-   }
-   if (current.success && current.stdout.trim() !== owner.binding.snapshotCommit)
-    throw worktreeArchiveError('Archive finalization outcome is ambiguous. The binding is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
-   if (!current.success)
-    throw worktreeArchiveError('Archive finalization outcome is ambiguous. The binding is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
-   if (current.success) {
-    owner.binding = owner.binding.restoreCasStarted
-     ? owner.binding
-     : await archiveSessions.markWorktreeArchiveRestoreCasStarted(owner, owner.binding.revision);
-    await runGitCommandOrThrow(context.primaryWorktree, ['update-ref', '-d', owner.binding.archiveRef, owner.binding.snapshotCommit], 'Failed to delete the worktree archive');
-   }
-   await archiveSessions.markWorktreeArchiveRestoreCasCompleted(owner, owner.binding.revision);
-   cleanup = true;
-   return { id: input.id, conflicts: JSON.parse(owner.binding.expectedFingerprint).conflicts, sessionBinding: { status: 'bound', phase: 'finalizing' } };
-  }
-  const archive = await readWorktreeArchive(context.primaryWorktree, archiveId);
-  if (owner && (archive.ref !== owner.binding.archiveRef || archive.commit !== owner.binding.snapshotCommit))
-   throw worktreeArchiveError('Archive ref changed', 'WORKTREE_ARCHIVE_REF_CHANGED', 409);
-  await waitForActiveWorktreeBootstrap(worktreeDirectory);
-  const bootstrap = worktreeBootstrapState.get(await toCanonicalBootstrapStateKey(worktreeDirectory));
-  if (bootstrap?.status === WORKTREE_BOOTSTRAP_FAILED)
-   throw worktreeArchiveError('The worktree did not finish setting up. The archive is kept.', 'WORKTREE_BOOTSTRAP_FAILED', 409);
-  if (!owner) {
-   const conflicts = await applyWorktreeArchiveSnapshot(worktreeDirectory, archive);
-   await runGitCommandOrThrow(context.primaryWorktree, ['update-ref', '-d', archive.ref, archive.commit], 'Failed to delete the worktree archive');
-   await publishWorktreeTopologyChange(context.primaryWorktree);
-   return { id: archive.id, conflicts, sessionBinding: { status: 'unbound' } };
-  }
-  let binding = owner.binding;
-  let current = await fingerprintWorktreeRestore(worktreeDirectory);
-  if (owner.recovering) {
-   const old = await fingerprintWorktreeRestore(owner.previousTargetDirectory);
-   const oldPreimage = JSON.parse(binding.preapplyFingerprint);
-   const oldExpected = JSON.parse(binding.expectedFingerprint);
-   const oldIsPreimage = old && JSON.stringify(old) === JSON.stringify(oldPreimage);
-   const oldIsExpected = old && JSON.stringify(old) === JSON.stringify(oldExpected);
-   if (old && ((oldIsPreimage && !binding.applyAttempted) || (oldIsExpected && !oldIsPreimage)))
-    throw worktreeArchiveError('The original restore target is not ambiguous.', 'WORKTREE_ARCHIVE_TARGET_CHANGED', 409);
-   if (JSON.stringify(current) !== JSON.stringify(oldPreimage))
-    throw worktreeArchiveError('The recovery checkout does not match the captured preimage.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
-   const expected = await prospectiveWorktreeRestore(worktreeDirectory, archive, current);
-   binding = await archiveSessions.pinWorktreeArchiveRestore(owner, { preapplyHead: current.head, preapplyFingerprint: current, expectedFingerprint: expected });
-  } else if (!binding.targetWorkspaceId) {
-   const expected = await prospectiveWorktreeRestore(worktreeDirectory, archive, current);
-   binding = await archiveSessions.pinWorktreeArchiveRestore(owner, { preapplyHead: current.head, preapplyFingerprint: current, expectedFingerprint: expected });
-  }
-  // Fingerprinting and the prospective helper run before the target is pinned.
-  // Re-read under the persisted fence before deciding whether an apply is safe.
-  current = await fingerprintWorktreeRestore(worktreeDirectory);
-  const preimage = JSON.parse(binding.preapplyFingerprint);
-  const expected = JSON.parse(binding.expectedFingerprint);
-  if (JSON.stringify(current) === JSON.stringify(preimage)) {
-   if (binding.applyAttempted)
-    throw Object.assign(worktreeArchiveError('Restore state is ambiguous. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409), { details: { revision: binding.revision, recoveryHead: binding.preapplyHead } });
-   binding = await archiveSessions.markWorktreeArchiveRestoreAttempted(owner, binding.revision);
-   await applyWorktreeArchiveSnapshot(worktreeDirectory, archive);
-   current = await fingerprintWorktreeRestore(worktreeDirectory);
-   if (JSON.stringify(current) !== JSON.stringify(expected))
-    throw worktreeArchiveError('Restore result differs from the captured result. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
-  } else if (JSON.stringify(current) !== JSON.stringify(expected)) {
-   throw Object.assign(worktreeArchiveError('Restore state is ambiguous. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409), { details: { revision: binding.revision, recoveryHead: binding.preapplyHead } });
-  }
-  binding = await archiveSessions.finishWorktreeArchiveRestore(owner);
-  binding = await archiveSessions.finalizeWorktreeArchiveRestore(owner, binding.revision);
-  binding = await archiveSessions.markWorktreeArchiveRestoreCasStarted(owner, binding.revision);
-  await runGitCommandOrThrow(context.primaryWorktree, ['update-ref', '-d', archive.ref, archive.commit], 'Failed to delete the worktree archive');
-  binding = await archiveSessions.markWorktreeArchiveRestoreCasCompleted(owner, binding.revision);
-  cleanup = true;
-  await publishWorktreeTopologyChange(context.primaryWorktree);
-  return { id: archive.id, conflicts: expected.conflicts, sessionBinding: { status: 'bound', phase: 'finalizing' } };
- } finally {
-  if (owner) {
-   await archiveSessions.releaseWorktreeArchiveRestore(owner);
-   if (cleanup) await archiveSessions.cleanupWorktreeArchiveRestore(owner);
-  }
- }
-}
-
-const deleteArchiveRefs = async (directory, archiveRef, snapshotCommit, branchRef, branchOid) => {
- const env = await buildGitEnv(directory);
- const commands = `start\ndelete ${archiveRef} ${snapshotCommit}\n${branchRef ? `delete ${branchRef} ${branchOid}\n` : ''}prepare\ncommit\n`;
- await new Promise((resolve, reject) => {
-  const child = spawn(getGitBinary(), ['update-ref', '--stdin'], { cwd: directory, env, stdio: ['pipe', 'ignore', 'pipe'], windowsHide: true });
-  let stderr = '';
-  child.stderr.on('data', (chunk) => { stderr += String(chunk); });
-  child.on('error', reject);
-  child.on('close', (code) => code === 0 ? resolve() : reject(worktreeArchiveError(`Archive ref transaction failed: ${stderr.trim()}`, 'WORKTREE_ARCHIVE_REF_CHANGED', 409)));
-  child.stdin.on('error', () => { });
-  child.stdin.end(commands);
- });
 };
 
-export async function deleteWorktreeArchive(directory, input = {}, { archiveSessions } = {}) {
- const archiveId = assertWorktreeArchiveId(input?.id);
- const context = await resolveWorktreeArchiveProjectContext(directory);
- if (!archiveSessions?.prepareWorktreeArchiveDelete) throw worktreeArchiveError('Host archive authority is unavailable', 'WORKTREE_ARCHIVE_AUTHORITY_UNAVAILABLE', 503);
- let owner = await archiveSessions.prepareWorktreeArchiveDelete({ projectDirectory: context.primaryWorktree, archiveId });
- let cleanup = false;
- try {
-  if (owner?.binding.phase === 'finalizing') {
-   owner = await archiveSessions.claimWorktreeArchiveDelete(owner);
-   const current = await runGitCommand(context.primaryWorktree, ['rev-parse', '--verify', owner.binding.archiveRef]);
-   if (current.success || !owner.binding.deleteCasCompleted || owner.binding.sessions.some((item) => item.progress !== 'deleted'))
-    throw worktreeArchiveError('Archive deletion outcome is ambiguous. The binding is kept.', 'WORKTREE_ARCHIVE_DELETE_RECOVERY_REQUIRED', 409);
-   if (owner.binding.deleteBranchRequested) {
-    const branchRef = `refs/heads/${owner.binding.branchName}`;
-    const branch = await runGitCommand(context.primaryWorktree, ['rev-parse', '--verify', branchRef]);
-    if (branch.success) throw worktreeArchiveError('Archive deletion outcome is ambiguous. The binding is kept.', 'WORKTREE_ARCHIVE_DELETE_RECOVERY_REQUIRED', 409);
-   }
-   cleanup = true;
-   return { id: archiveId, branchDeleted: Boolean(owner.binding.deleteBranchRequested), sessionBinding: { status: 'bound' } };
+const restoreRecoverySchema = z.object({
+  mode: z.string().optional(),
+  revision: z.unknown().optional(),
+});
+const restoreFingerprintSchema = z.looseObject({
+  head: z.string(),
+  tree: z.string(),
+  index: z.string(),
+  unmerged: z.string(),
+  status: z.string(),
+  conflicts: z.boolean(),
+});
+const parseRestoreFingerprint = (stored: string): RestoreFingerprint => {
+  try {
+    return restoreFingerprintSchema.parse(JSON.parse(stored));
+  } catch (error) {
+    if (error instanceof z.ZodError)
+      throw worktreeArchiveError('The stored restore fingerprint is unreadable. The binding is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+    throw error;
   }
-  const archive = await readWorktreeArchive(context.primaryWorktree, archiveId);
-  if (owner && (archive.ref !== owner.binding.archiveRef || archive.commit !== owner.binding.snapshotCommit))
-   throw worktreeArchiveError('Archive ref changed', 'WORKTREE_ARCHIVE_REF_CHANGED', 409);
-  const branch = owner ? owner.binding.branchName : archive.branch;
-  const branchOid = owner ? owner.binding.branchOid : null;
-  if (input.deleteBranch === true && (!branch || (owner && !branchOid)))
-   throw worktreeArchiveError('The archived branch identity is unavailable', 'WORKTREE_ARCHIVE_BRANCH_CHANGED', 409);
-  const branchRef = input.deleteBranch === true && branch ? `refs/heads/${branch}` : null;
-  const preflightBranch = async () => {
-   if (!branchRef) return;
-   const checkedOut = (await listWorktreeEntries(context.primaryWorktree)).some((entry) => cleanBranchName(String(entry.branchRef || entry.branch || '').trim()) === branch);
-   if (checkedOut) throw worktreeArchiveError('The archived branch is checked out', 'WORKTREE_ARCHIVE_BRANCH_IN_USE', 409);
-   const current = await runGitCommand(context.primaryWorktree, ['rev-parse', '--verify', branchRef]);
-   if (!current.success || (branchOid && current.stdout.trim() !== branchOid)) throw worktreeArchiveError('The archived branch changed', 'WORKTREE_ARCHIVE_BRANCH_CHANGED', 409);
-   return current.stdout.trim();
-  };
-  const exactBranchOid = await preflightBranch();
-  if (owner) owner = await archiveSessions.claimWorktreeArchiveDelete(owner);
-  let binding = owner?.binding;
-  if (owner) binding = await archiveSessions.deleteWorktreeArchiveSessions(owner);
-  await preflightBranch();
-  if (owner) binding = await archiveSessions.finalizeWorktreeArchiveDelete(owner, binding.revision, input.deleteBranch === true);
-  await deleteArchiveRefs(context.primaryWorktree, archive.ref, archive.commit, branchRef, branchOid ?? exactBranchOid);
-  if (owner) binding = await archiveSessions.markWorktreeArchiveDeleteCasCompleted(owner, binding.revision);
-  cleanup = Boolean(owner);
-  return { id: archive.id, branchDeleted: Boolean(branchRef), sessionBinding: { status: owner ? 'bound' : 'unbound' } };
- } finally {
-  if (owner?.claimId) {
-   await archiveSessions.releaseWorktreeArchiveRestore(owner);
-   if (cleanup) await archiveSessions.cleanupWorktreeArchiveRestore(owner);
+};
+const requireArchiveMethod = <Method>(method: Method | undefined, name: string): Method => {
+  if (!method) throw new TypeError(`archiveSessions.${name} is not a function`);
+  return method;
+};
+
+export async function restoreWorktreeArchive(
+  directory: string,
+  input: { id?: unknown; recovery?: unknown } = {},
+  { archiveSessions }: { archiveSessions?: WorktreeArchiveSessionService | undefined } = {},
+) {
+  const archiveId = assertWorktreeArchiveId(input?.id);
+  let worktreeDirectory = normalizeDirectoryPath(directory);
+  if (!worktreeDirectory) throw worktreeArchiveError('Worktree directory is required', undefined, 400);
+  const context = await resolveWorktreeArchiveProjectContext(worktreeDirectory);
+  if (!archiveSessions?.prepareWorktreeArchiveRestore) throw worktreeArchiveError('Host archive authority is unavailable', 'WORKTREE_ARCHIVE_AUTHORITY_UNAVAILABLE', 503);
+  const parsedRecovery = restoreRecoverySchema.safeParse(input?.recovery);
+  const resume = parsedRecovery.success && parsedRecovery.data.mode === 'same_target';
+  let pinnedRevision: number | undefined;
+  if (resume) {
+    const rawRevision = parsedRecovery.data.revision;
+    if (!Number.isSafeInteger(rawRevision) || Number(rawRevision) <= 0 || !archiveSessions.resolveWorktreeArchivePinnedTarget)
+      throw worktreeArchiveError('Restore revision is invalid', 'WORKTREE_ARCHIVE_TARGET_CHANGED', 409);
+    pinnedRevision = Number(rawRevision);
+    worktreeDirectory = await archiveSessions.resolveWorktreeArchivePinnedTarget({ projectDirectory: context.primaryWorktree, archiveId, revision: pinnedRevision });
   }
- }
+  const targetDirectory = await fsp.realpath(worktreeDirectory);
+  const owner = await archiveSessions.prepareWorktreeArchiveRestore({ projectDirectory: context.primaryWorktree, targetDirectory, archiveId, recovery: resume ? undefined : input?.recovery, expectedRevision: pinnedRevision });
+  let cleanup = false;
+  try {
+    if (owner?.binding.phase === 'finalizing') {
+      if (owner.binding.sessions.some((item) => !isPrimitiveString(item) && item.progress !== 'restored'))
+        throw worktreeArchiveError('Archive finalization is incomplete. The binding is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+      const current = await runGitCommand(context.primaryWorktree, ['rev-parse', '--verify', owner.binding.archiveRef]);
+      const expectedConflicts = owner.binding.expectedFingerprint ? parseRestoreFingerprint(owner.binding.expectedFingerprint).conflicts : false;
+      if (owner.binding.restoreCasCompleted) {
+        if (current.success) throw worktreeArchiveError('Archive finalization outcome is ambiguous. The binding is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+        cleanup = true;
+        return { id: input.id, conflicts: expectedConflicts, sessionBinding: { status: 'bound', phase: 'finalizing' } };
+      }
+      if (current.success && current.stdout.trim() !== owner.binding.snapshotCommit)
+        throw worktreeArchiveError('Archive finalization outcome is ambiguous. The binding is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+      if (!current.success)
+        throw worktreeArchiveError('Archive finalization outcome is ambiguous. The binding is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+      if (current.success) {
+        owner.binding = owner.binding.restoreCasStarted
+          ? owner.binding
+          : await requireArchiveMethod(archiveSessions.markWorktreeArchiveRestoreCasStarted, 'markWorktreeArchiveRestoreCasStarted')(owner, owner.binding.revision);
+        await runGitCommandOrThrow(context.primaryWorktree, ['update-ref', '-d', owner.binding.archiveRef, owner.binding.snapshotCommit], 'Failed to delete the worktree archive');
+      }
+      await archiveSessions.markWorktreeArchiveRestoreCasCompleted?.(owner, owner.binding.revision);
+      cleanup = true;
+      return { id: input.id, conflicts: expectedConflicts, sessionBinding: { status: 'bound', phase: 'finalizing' } };
+    }
+    const archive = await readWorktreeArchive(context.primaryWorktree, archiveId);
+    if (owner && (archive.ref !== owner.binding.archiveRef || archive.commit !== owner.binding.snapshotCommit))
+      throw worktreeArchiveError('Archive ref changed', 'WORKTREE_ARCHIVE_REF_CHANGED', 409);
+    await waitForActiveWorktreeBootstrap(worktreeDirectory);
+    const bootstrap = worktreeBootstrapState.get(await toCanonicalBootstrapStateKey(worktreeDirectory));
+    if (bootstrap?.status === WORKTREE_BOOTSTRAP_FAILED)
+      throw worktreeArchiveError('The worktree did not finish setting up. The archive is kept.', 'WORKTREE_BOOTSTRAP_FAILED', 409);
+    if (!owner) {
+      const conflicts = await applyWorktreeArchiveSnapshot(worktreeDirectory, archive);
+      await runGitCommandOrThrow(context.primaryWorktree, ['update-ref', '-d', archive.ref, archive.commit], 'Failed to delete the worktree archive');
+      await publishWorktreeTopologyChange(context.primaryWorktree);
+      return { id: archive.id, conflicts, sessionBinding: { status: 'unbound' } };
+    }
+    let binding = owner.binding;
+    let current = await fingerprintWorktreeRestore(worktreeDirectory);
+    if (owner.recovering) {
+      const old = owner.previousTargetDirectory ? await fingerprintWorktreeRestore(owner.previousTargetDirectory) : null;
+      const oldPreimage = binding.preapplyFingerprint ? parseRestoreFingerprint(binding.preapplyFingerprint) : null;
+      const oldExpected = binding.expectedFingerprint ? parseRestoreFingerprint(binding.expectedFingerprint) : null;
+      const oldIsPreimage = old && JSON.stringify(old) === JSON.stringify(oldPreimage);
+      const oldIsExpected = old && JSON.stringify(old) === JSON.stringify(oldExpected);
+      if (old && ((oldIsPreimage && !binding.applyAttempted) || (oldIsExpected && !oldIsPreimage)))
+        throw worktreeArchiveError('The original restore target is not ambiguous.', 'WORKTREE_ARCHIVE_TARGET_CHANGED', 409);
+      if (JSON.stringify(current) !== JSON.stringify(oldPreimage))
+        throw worktreeArchiveError('The recovery checkout does not match the captured preimage.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+      const expected = await prospectiveWorktreeRestore(worktreeDirectory, archive, current);
+      binding = await requireArchiveMethod(archiveSessions.pinWorktreeArchiveRestore, 'pinWorktreeArchiveRestore')(owner, { preapplyHead: current.head, preapplyFingerprint: current, expectedFingerprint: expected });
+    } else if (!binding.targetWorkspaceId) {
+      const expected = await prospectiveWorktreeRestore(worktreeDirectory, archive, current);
+      binding = await requireArchiveMethod(archiveSessions.pinWorktreeArchiveRestore, 'pinWorktreeArchiveRestore')(owner, { preapplyHead: current.head, preapplyFingerprint: current, expectedFingerprint: expected });
+    }
+    current = await fingerprintWorktreeRestore(worktreeDirectory);
+    const preimage = binding.preapplyFingerprint ? parseRestoreFingerprint(binding.preapplyFingerprint) : null;
+    const expected: RestoreFingerprint = binding.expectedFingerprint ? parseRestoreFingerprint(binding.expectedFingerprint) : await prospectiveWorktreeRestore(worktreeDirectory, archive, current);
+    if (JSON.stringify(current) === JSON.stringify(preimage)) {
+      if (binding.applyAttempted)
+        throw Object.assign(worktreeArchiveError('Restore state is ambiguous. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409), { details: { revision: binding.revision, recoveryHead: binding.preapplyHead } });
+      binding = await requireArchiveMethod(archiveSessions.markWorktreeArchiveRestoreAttempted, 'markWorktreeArchiveRestoreAttempted')(owner, binding.revision);
+      await applyWorktreeArchiveSnapshot(worktreeDirectory, archive);
+      current = await fingerprintWorktreeRestore(worktreeDirectory);
+      if (JSON.stringify(current) !== JSON.stringify(expected))
+        throw worktreeArchiveError('Restore result differs from the captured result. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+    } else if (JSON.stringify(current) !== JSON.stringify(expected)) {
+      throw Object.assign(worktreeArchiveError('Restore state is ambiguous. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409), { details: { revision: binding.revision, recoveryHead: binding.preapplyHead } });
+    }
+    binding = await requireArchiveMethod(archiveSessions.finishWorktreeArchiveRestore, 'finishWorktreeArchiveRestore')(owner);
+    binding = await requireArchiveMethod(archiveSessions.finalizeWorktreeArchiveRestore, 'finalizeWorktreeArchiveRestore')(owner, binding.revision);
+    binding = await requireArchiveMethod(archiveSessions.markWorktreeArchiveRestoreCasStarted, 'markWorktreeArchiveRestoreCasStarted')(owner, binding.revision);
+    await runGitCommandOrThrow(context.primaryWorktree, ['update-ref', '-d', archive.ref, archive.commit], 'Failed to delete the worktree archive');
+    await requireArchiveMethod(archiveSessions.markWorktreeArchiveRestoreCasCompleted, 'markWorktreeArchiveRestoreCasCompleted')(owner, binding.revision);
+    cleanup = true;
+    await publishWorktreeTopologyChange(context.primaryWorktree);
+    return { id: archive.id, conflicts: expected.conflicts, sessionBinding: { status: 'bound', phase: 'finalizing' } };
+  } finally {
+    if (owner) {
+      await archiveSessions.releaseWorktreeArchiveRestore?.(owner);
+      if (cleanup) await archiveSessions.cleanupWorktreeArchiveRestore?.(owner);
+    }
+  }
+}
+
+const deleteArchiveRefs = async (
+  directory: string,
+  archiveRef: string,
+  snapshotCommit: string,
+  branchRef: string | null,
+  branchOid: string | null | undefined,
+) => {
+  const env = await buildGitEnv(directory);
+  const commands = `start\ndelete ${archiveRef} ${snapshotCommit}\n${branchRef ? `delete ${branchRef} ${branchOid}\n` : ''}prepare\ncommit\n`;
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(getGitBinary(), ['update-ref', '--stdin'], { cwd: directory, env, stdio: ['pipe', 'ignore', 'pipe'], windowsHide: true });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+    child.on('error', reject);
+    child.on('close', (code) => code === 0 ? resolve() : reject(worktreeArchiveError(`Archive ref transaction failed: ${stderr.trim()}`, 'WORKTREE_ARCHIVE_REF_CHANGED', 409)));
+    child.stdin.on('error', () => { });
+    child.stdin.end(commands);
+  });
+};
+
+export async function deleteWorktreeArchive(
+  directory: string,
+  input: { id?: unknown; deleteBranch?: unknown } = {},
+  { archiveSessions }: { archiveSessions?: WorktreeArchiveSessionService | undefined } = {},
+) {
+  const archiveId = assertWorktreeArchiveId(input?.id);
+  const context = await resolveWorktreeArchiveProjectContext(directory);
+  if (!archiveSessions?.prepareWorktreeArchiveDelete) throw worktreeArchiveError('Host archive authority is unavailable', 'WORKTREE_ARCHIVE_AUTHORITY_UNAVAILABLE', 503);
+  const initialOwner = await archiveSessions.prepareWorktreeArchiveDelete({ projectDirectory: context.primaryWorktree, archiveId });
+  let owner: WorktreeArchiveBoundOwner | undefined;
+  let cleanup = false;
+  try {
+    if (initialOwner?.binding.phase === 'finalizing') {
+      const claimed = await requireArchiveMethod(archiveSessions.claimWorktreeArchiveDelete, 'claimWorktreeArchiveDelete')(initialOwner);
+      owner = claimed;
+      const current = await runGitCommand(context.primaryWorktree, ['rev-parse', '--verify', claimed.binding.archiveRef]);
+      if (current.success || !claimed.binding.deleteCasCompleted || claimed.binding.sessions.some((item) => !isPrimitiveString(item) && item.progress !== 'deleted'))
+        throw worktreeArchiveError('Archive deletion outcome is ambiguous. The binding is kept.', 'WORKTREE_ARCHIVE_DELETE_RECOVERY_REQUIRED', 409);
+      if (claimed.binding.deleteBranchRequested) {
+        const branchRef = `refs/heads/${claimed.binding.branchName}`;
+        const branch = await runGitCommand(context.primaryWorktree, ['rev-parse', '--verify', branchRef]);
+        if (branch.success) throw worktreeArchiveError('Archive deletion outcome is ambiguous. The binding is kept.', 'WORKTREE_ARCHIVE_DELETE_RECOVERY_REQUIRED', 409);
+      }
+      cleanup = true;
+      return { id: archiveId, branchDeleted: Boolean(claimed.binding.deleteBranchRequested), sessionBinding: { status: 'bound' } };
+    }
+    const archive = await readWorktreeArchive(context.primaryWorktree, archiveId);
+    if (initialOwner && (archive.ref !== initialOwner.binding.archiveRef || archive.commit !== initialOwner.binding.snapshotCommit))
+      throw worktreeArchiveError('Archive ref changed', 'WORKTREE_ARCHIVE_REF_CHANGED', 409);
+    const branch = initialOwner ? initialOwner.binding.branchName : archive.branch;
+    const branchOid = initialOwner ? initialOwner.binding.branchOid : null;
+    if (input.deleteBranch === true && (!branch || (initialOwner && !branchOid)))
+      throw worktreeArchiveError('The archived branch identity is unavailable', 'WORKTREE_ARCHIVE_BRANCH_CHANGED', 409);
+    const branchRef = input.deleteBranch === true && branch ? `refs/heads/${branch}` : null;
+    const preflightBranch = async () => {
+      if (!branchRef) return;
+      const checkedOut = (await listWorktreeEntries(context.primaryWorktree)).some((entry) => cleanBranchName(String(entry.branchRef || entry.branch || '').trim()) === branch);
+      if (checkedOut) throw worktreeArchiveError('The archived branch is checked out', 'WORKTREE_ARCHIVE_BRANCH_IN_USE', 409);
+      const current = await runGitCommand(context.primaryWorktree, ['rev-parse', '--verify', branchRef]);
+      if (!current.success || (branchOid && current.stdout.trim() !== branchOid)) throw worktreeArchiveError('The archived branch changed', 'WORKTREE_ARCHIVE_BRANCH_CHANGED', 409);
+      return current.stdout.trim();
+    };
+    const exactBranchOid = await preflightBranch();
+    if (initialOwner) owner = await requireArchiveMethod(archiveSessions.claimWorktreeArchiveDelete, 'claimWorktreeArchiveDelete')(initialOwner);
+    if (owner) {
+      let binding = await requireArchiveMethod(archiveSessions.deleteWorktreeArchiveSessions, 'deleteWorktreeArchiveSessions')(owner);
+      await preflightBranch();
+      binding = await requireArchiveMethod(archiveSessions.finalizeWorktreeArchiveDelete, 'finalizeWorktreeArchiveDelete')(owner, binding.revision, input.deleteBranch === true);
+      await deleteArchiveRefs(context.primaryWorktree, archive.ref, archive.commit, branchRef, branchOid ?? exactBranchOid);
+      await requireArchiveMethod(archiveSessions.markWorktreeArchiveDeleteCasCompleted, 'markWorktreeArchiveDeleteCasCompleted')(owner, binding.revision);
+      cleanup = true;
+    } else {
+      await preflightBranch();
+      await deleteArchiveRefs(context.primaryWorktree, archive.ref, archive.commit, branchRef, branchOid ?? exactBranchOid);
+    }
+    return { id: archive.id, branchDeleted: Boolean(branchRef), sessionBinding: { status: owner ? 'bound' : 'unbound' } };
+  } finally {
+    if (owner?.claimId) {
+      await archiveSessions.releaseWorktreeArchiveRestore?.(owner);
+      if (cleanup) await archiveSessions.cleanupWorktreeArchiveRestore?.(owner);
+    }
+  }
 }
 
 export async function deleteBranch(directory: string, branch: string, options: { ifExists?: boolean; force?: unknown } = {}) {
@@ -7916,14 +7976,14 @@ export async function rebase(directory: string, options: { onto?: string } = {})
     };
   } catch (error) {
     const errorMessage = String(errorField(error, 'message') || error || '').toLowerCase();
-    const isConflict = errorMessage.includes('conflict') || 
-                       errorMessage.includes('could not apply') ||
-                       errorMessage.includes('merge conflict');
+    const isConflict = errorMessage.includes('conflict') ||
+      errorMessage.includes('could not apply') ||
+      errorMessage.includes('merge conflict');
 
     if (isConflict) {
       const stateDirectory = parentRecord ? await rebaseStateDirectory(git, repoRoot) : null;
       if (stateDirectory) {
-        await fsp.writeFile(path.join(stateDirectory, REBASE_PARENT_FILE), JSON.stringify(parentRecord)).catch(() => {});
+        await fsp.writeFile(path.join(stateDirectory, REBASE_PARENT_FILE), JSON.stringify(parentRecord)).catch(() => { });
       }
       const status = await git.status().catch(() => ({ conflicted: [] }));
       return {
@@ -7967,9 +8027,9 @@ export async function merge(directory: string, options: { branch?: string } = {}
     };
   } catch (error) {
     const errorMessage = String(errorField(error, 'message') || error || '').toLowerCase();
-    const isConflict = errorMessage.includes('conflict') || 
-                       errorMessage.includes('merge conflict') ||
-                       errorMessage.includes('automatic merge failed');
+    const isConflict = errorMessage.includes('conflict') ||
+      errorMessage.includes('merge conflict') ||
+      errorMessage.includes('automatic merge failed');
 
     if (isConflict) {
       const status = await git.status().catch(() => ({ conflicted: [] }));
@@ -8035,9 +8095,9 @@ async function continueRebaseSteps(git: SimpleGit, repoRoot: string) {
     }
 
     const isConflict = errorMessage.includes('conflict') ||
-                       errorMessage.includes('needs merge') ||
-                       errorMessage.includes('unmerged') ||
-                       errorMessage.includes('fix conflicts');
+      errorMessage.includes('needs merge') ||
+      errorMessage.includes('unmerged') ||
+      errorMessage.includes('fix conflicts');
 
     if (isConflict) {
       const status = await git.status().catch(() => ({ conflicted: [] }));
@@ -8071,9 +8131,9 @@ export async function continueMerge(directory: string) {
   } catch (error) {
     const errorMessage = String(errorField(error, 'message') || error || '').toLowerCase();
     const isConflict = errorMessage.includes('conflict') ||
-                       errorMessage.includes('needs merge') ||
-                       errorMessage.includes('unmerged') ||
-                       errorMessage.includes('fix conflicts');
+      errorMessage.includes('needs merge') ||
+      errorMessage.includes('unmerged') ||
+      errorMessage.includes('fix conflicts');
 
     if (isConflict) {
       const status = await git.status().catch(() => ({ conflicted: [] }));

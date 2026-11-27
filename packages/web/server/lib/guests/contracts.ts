@@ -1,6 +1,6 @@
 import type { AttachMode, GuestCapability, OpenChamberManifest, PublicSocketBinding } from 'ohpichamber-sdk';
+import type { EnterpriseBlockedCapability } from './enterprise.js';
 import type { GitOrigin } from './persist.js';
-
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
 
@@ -27,18 +27,19 @@ export type GuestPackage = Partial<Omit<OpenChamberManifest['contributes'], 'pan
   statusHeight?: number;
   statusDefaultExpanded?: boolean;
   statusRequiresProject?: boolean;
+  opencodePlugin?: string | undefined;
 };
 
 export type GuestRecord = GuestPackage & {
-  source?: string;
-  path?: string | null;
-  enabled?: boolean;
-  capabilityGrants?: GuestCapability[];
+  source?: string | undefined;
+  path?: string | null | undefined;
+  enabled?: boolean | undefined;
+  capabilityGrants?: GuestCapability[] | undefined;
   gitOrigin?: GitOrigin | undefined;
   socketBindings?: PublicSocketBinding[] | undefined;
-  revision?: number;
+  revision?: number | undefined;
   storageId?: unknown;
-  enterpriseBlocked?: GuestCapability[];
+  enterpriseBlocked?: EnterpriseBlockedCapability[] | undefined;
   folders?: string[] | undefined;
-  update?: { version: string };
+  update?: { version: string } | undefined;
 };

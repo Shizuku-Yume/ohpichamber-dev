@@ -87,6 +87,8 @@ export interface WalkthroughRouteDependencies {
     directory: string;
     bindingRevision: number;
   }) => Promise<ProviderReadContext>;
+  resolveWorkspaceDirectory: (directory: string) => Promise<{ workspaceId?: string } | null | undefined>;
+  resolveRepositoryWorkspace: (directory: string) => Promise<{ workspaceId?: string } | null | undefined>;
 }
 
 const isWalkthroughBody = (value: unknown): value is WalkthroughBody =>
@@ -109,8 +111,12 @@ const modelIdSchema = z.string().trim().min(1).max(200).optional().catch(undefin
 
 const clientIsGone = (res: Response) => res.writableEnded || res.destroyed;
 
-export function registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext, resolveWorkspaceDirectory, resolveRepositoryWorkspace }) {
-  const respondWithError = (res, error, fallback) => {
+export function registerWalkthroughRoutes(
+  app: Application,
+  { getWalkthroughService, validateReadContext, resolveWorkspaceDirectory, resolveRepositoryWorkspace }: WalkthroughRouteDependencies,
+) {
+  const respondWithError = (res: Response, cause: unknown, fallback: string) => {
+    const error = isRouteFailure(cause) ? cause : undefined;
     let bindingStatus = 0;
     if (error?.code === 'INVALID_SOURCE_CONTROL_BINDING' || error?.code === 'INVALID_SOURCE_CONTROL_READ_CONTEXT') {
       bindingStatus = 400;
@@ -119,7 +125,7 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
     }
     const statusCode = Number(error?.statusCode ?? error?.status) || bindingStatus || 500;
     if (statusCode >= 500) {
-      console.error(`${fallback}:`, error);
+      console.error(`${fallback}:`, cause);
     }
     const body: WalkthroughErrorResponse = {
       error: error?.message || fallback,
@@ -139,7 +145,7 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
       return null;
     }
   };
-  const workspaceForDirectory = async (directory, readContext) => {
+  const workspaceForDirectory = async (directory: string, readContext: ProviderReadContext | undefined) => {
     const scope = await (readContext ? resolveRepositoryWorkspace(directory) : resolveWorkspaceDirectory(directory));
     if (!scope?.workspaceId) throw Object.assign(new Error('Workspace is unavailable'), { statusCode: 403, code: 'UNAUTHORIZED' });
     return scope.workspaceId;
@@ -189,7 +195,7 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
       }
 
       const source = readSource(req.query.source);
-      const readContext = await validatePullRequestContext(source, req.query, directory);
+      const readContext = await validatePullRequestContext(isPullRequestInput(source) ? source : undefined, req.query, directory);
       const workspaceId = await workspaceForDirectory(readContext?.directory ?? directory, readContext);
       const { getWalkthrough, getPullRequestDiff, readWalkthroughInstructions } = await getWalkthroughService();
       const result = await getWalkthrough(
@@ -259,12 +265,13 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
 
   app.post('/api/walkthrough/generate', async (req, res) => {
     try {
-      const { directory, source, force, model, providerID, modelID, language } = isWalkthroughBody(req.body) ? req.body : {};
+      const body = isWalkthroughBody(req.body) ? req.body : undefined;
+      const { directory, source, force, model, providerID, modelID, language } = body ?? {};
       if (!directory || !isText(directory)) {
         return res.status(400).json({ error: 'directory is required' });
       }
 
-      const readContext = await validatePullRequestContext(source, req.body, directory);
+      const readContext = await validatePullRequestContext(isPullRequestInput(source) ? source : undefined, body, directory);
       const workspaceId = await workspaceForDirectory(readContext?.directory ?? directory, readContext);
       const { generateWalkthrough, getPullRequestDiff, readWalkthroughInstructions } = await getWalkthroughService();
       const result = await generateWalkthrough(

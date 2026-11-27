@@ -30,27 +30,6 @@ An entry leaves this file in one of two ways:
 
 ## Entries
 
-## Fork-owned server JavaScript awaits TypeScript conversion
-
-The merge also carried untyped fork JavaScript bodies into upstream `.ts`
-destinations. `packages/web/scripts/fork-owned-server-untyped.json` records each
-retained path and its original fork path. Historical worktree measurements:
-fork `881705d19b` passed its frontend-only web check (2,299 files, two projects)
-and had zero server implementation TypeScript; upstream `1928155551` passed its
-strict server check. Their strict compiler configurations are unchanged by this
-scope repair. The explicit legacy set supplies generated declarations through a
-no-check referenced project; all other roots, including new neighbors, retain
-strict checking and server lint. Remove entries as their bodies gain real type
-annotations and pass those checks. This is preserved prior coverage, not a
-claim that the carried-over bodies have been type-verified.
-
-- **Where:** `packages/web/scripts/fork-owned-server-javascript.mjs`, `packages/web/server/`
-- **Priority:** worth-doing
-- **Problem:** the upstream TypeScript-only guard conflicts with 95 retained fork-owned JavaScript modules, including excluded isolated-space modules. The explicit generated list freezes only those existing paths; new server modules still require TypeScript.
-- **Impact:** the listed implementations are not covered by the server TypeScript conversion gate.
-- **Solution:** convert the retained modules by owner with real types and existing runtime tests, removing each path from the explicit list. Preserve the isolated-space release exclusion and Canonical/Host boundaries.
-- **Cost:** a separate server migration rather than mechanical renames or broad guard exemptions.
-
 ## Chat transcript still renders through ChatContainer instead of upstream ChatViewport
 
 - **Where:** `packages/ui/src/components/chat/ChatContainer.tsx`, `MessageList.tsx`, `ChatMessage.tsx`, `message/MessageBody.tsx`, `message/parts/ToolPart.tsx`; upstream `column/ChatViewport.tsx`, `timeline/*`, `message/body/*`, `message/parts/toolRow/*`

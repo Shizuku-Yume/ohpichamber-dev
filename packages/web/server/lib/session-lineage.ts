@@ -1,10 +1,7 @@
-/**
- * Which canonical runtime sessions are children of another root. A child is
- * identified by the Host-owned relation `sessionId !== rootSessionId`; no
- * OpenCode parent field or inferred directory relationship is used.
- */
 import { z } from 'zod';
+import type { CanonicalEvent } from '@openchamber/agent-contract';
 import { safeParseCanonicalEvent } from './event-stream/validated-event.js';
+import type { JsonValue } from './shared/json-values.js';
 
 const DEFAULT_LIMIT = 5000;
 
@@ -14,22 +11,40 @@ const operatorChildSchema = z.object({
   metadata: z.object({ openchamber: z.object({ kind: z.literal(OPERATOR_CHILD_KIND), parentID: z.string().min(1) }) }),
 });
 
-/** A session an operator agent started for itself, which no user answers in. */
-export const isOperatorChildSession = (record: unknown) => operatorChildSchema.safeParse(record).success;
+export interface OperatorChildRecord {
+  metadata?: JsonValue | null | undefined;
+}
 
-export function createSessionLineage({ limit = DEFAULT_LIMIT } = {}) {
-  // sessionId -> true for a child, false for an independent root.
-  const isChildById = new Map();
+export const isOperatorChildSession = (record: OperatorChildRecord | null | undefined): boolean =>
+  operatorChildSchema.safeParse(record).success;
 
-  const remember = (sessionId, rootSessionId) => {
-    if (typeof sessionId !== 'string' || !sessionId || typeof rootSessionId !== 'string' || !rootSessionId) return;
+export interface SessionLineageOptions {
+  limit?: number;
+}
+
+export type SessionLineageObservation = CanonicalEvent | JsonValue | undefined;
+
+export interface SessionLineage {
+  observe: (payload: SessionLineageObservation) => void;
+  remember: (sessionId: string, rootSessionId: string) => void;
+  isChild: (sessionId: string) => boolean | undefined;
+}
+
+export function createSessionLineage({ limit = DEFAULT_LIMIT }: SessionLineageOptions = {}): SessionLineage {
+  const isChildById = new Map<string, boolean>();
+
+  const remember = (sessionId: string, rootSessionId: string): void => {
+    if (!sessionId || !rootSessionId) return;
     isChildById.delete(sessionId);
     isChildById.set(sessionId, rootSessionId !== sessionId);
-    while (isChildById.size > limit) isChildById.delete(isChildById.keys().next().value);
+    while (isChildById.size > limit) {
+      const oldest = isChildById.keys().next().value;
+      if (oldest === undefined) break;
+      isChildById.delete(oldest);
+    }
   };
 
-  /** Learn session lineage only from validated canonical Host events. */
-  const observe = (payload) => {
+  const observe = (payload: SessionLineageObservation): void => {
     const parsed = safeParseCanonicalEvent(payload);
     if (!parsed.success) return;
     const event = parsed.data;
@@ -42,8 +57,7 @@ export function createSessionLineage({ limit = DEFAULT_LIMIT } = {}) {
     }
   };
 
-  /** True for a known child, false for a known root, undefined when unknown. */
-  const isChild = (sessionId) => isChildById.get(sessionId);
+  const isChild = (sessionId: string): boolean | undefined => isChildById.get(sessionId);
 
   return { observe, remember, isChild };
 }

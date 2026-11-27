@@ -14,7 +14,7 @@ Repository issues (GitHub, GitLab, Gitea) are not trackers. They belong to the s
 - guest routes, where a host-auth guest borrows a tracker's `hostAccess` when its descriptor allows it (`guests/host-session.js`);
 - the Host's own session-comment pipeline: a session event is handed to the tracker's `sessionStatus.post` only when a client posts it through the route below, and Linear's completed/failure comments are posted by the Host's canonical event runtime (`../linear/status-runtime.js`). No payload fan-out runtime exists in this tree, so `sessionStatus.createRuntime` is not part of the implementation here.
 
-`openchamber-sessions/session-link.js` gets it from `index.js` and turns an item link a tracker's `matchUrl` claims into a linked entry `{ id: '<provider>:<IDENTIFIER>', kind, provider, identifier }`. `/api/tracker` is host-only in `spaces/dispatcher.js`.
+`openchamber-sessions/session-link.js` gets it from `index.js` and turns an item link a tracker's `matchUrl` claims into a linked entry `{ id: '<provider>:<IDENTIFIER>', kind, provider, identifier }`. `/api/tracker` is host-only in `spaces/dispatcher.ts`.
 
 ### Why a Linear link is stored as `kind: 'linear'` and not `kind: 'tracker'`
 
@@ -66,11 +66,11 @@ Status codes copy the legacy Linear routes: disconnected is 200 `{ connected: fa
 - Extension trackers follow the catalog, never an event: a guest is a tracker while it is enabled, fully approved with an effective `service` grant, provides `tracker` and has a parsed `contributes.tracker`. Pause, removal, withdrawn approval and a grant whose scope changed detach it; a tracker detached mid-call refuses its account writes (`dispose`). Removal forgets its accounts, client, mapping and session records ("remove means forget"); a pause keeps them.
 - An extension tracker's credentials never leave `extension-accounts.js` but to mint a per-call handle, served on `/tracker/outbound`. A read's handle sends `GET` only; `items.updateState` and `comments.create` may write. `hostAccess` is off for every extension tracker. A 401 the service reports writes an account off only when the proxy saw the server answer 401 through that call's handle, and only at the account revision the call read.
 - Every write that follows a remote call is a compare-and-set: a connect commits under the identity `beginConnect` handed out, so a Disconnect meanwhile wins; a token refresh and an invalidation commit against the account's revision, so a delayed answer for a replaced credential changes nothing.
-- Only host sessions reach the session-status fan-out and the session linker (the hub rule in `../spaces/DOCUMENTATION.md`); `/api/tracker` is host-only in `spaces/dispatcher.js`. Sessions inside isolated spaces get no tracker comments and no tracker reads.
+- Only host sessions reach the session-status fan-out and the session linker (the hub rule in `../spaces/DOCUMENTATION.md`); `/api/tracker` is host-only in `spaces/dispatcher.ts`. Sessions inside isolated spaces get no tracker comments and no tracker reads.
 - Persisted identity strings do not change: tracked-items key `${provider}|${IDENTIFIER}`, tab key `${provider}:${IDENTIFIER}`, linked id `${provider}:${IDENTIFIER}`. The UI characterisation tests (`packages/ui/src/lib/trackers/linearIdentity.characterization.test.ts`) pin the Linear values.
 - A list `state` must be one of the descriptor's `stateFilters`; a people or priority filter the descriptor does not offer is 400, never ignored.
 - Tokens never leave the server. `hostAccess.accessToken()` is for the guest proxy, which keeps it on `hostAccess.apiOrigin`.
-- `/api/tracker` is host-only in `spaces/dispatcher.js`; a route added here is covered by that prefix.
+- `/api/tracker` is host-only in `spaces/dispatcher.ts`; a route added here is covered by that prefix.
 - Account-store read and parse failures propagate as errors so unreadable credentials cannot appear as a disconnected tracker. A missing or blank file is an empty store.
 - Account-store mutations run through one process-local read-modify-write chain and replace the file through a temporary file and rename with mode `0o600`. Concurrent writes must preserve unrelated account changes and keep credentials private.
 - Extension reconciliation runs serially. A catalog read failure preserves the registered set, and a malformed contribution affects only its own tracker, so an incomplete read cannot withdraw unrelated trackers.

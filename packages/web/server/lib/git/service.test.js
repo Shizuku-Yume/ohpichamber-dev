@@ -5213,6 +5213,33 @@ describe('worktree archives', () => {
   }
  };
 
+ it('rejects a finalizing restore whose stored fingerprint fails the fingerprint shape', async () => {
+  if (!canRunGit()) return;
+  const { repo, linked } = createArchivableWorktree();
+  void repo;
+  const fingerprint = { head: 'h', tree: 't', index: 'i', unmerged: 'u', status: 's', conflicts: false };
+  const malformed = JSON.stringify({ ...fingerprint, conflicts: 'not-a-boolean' });
+  const binding = {
+   archiveRef: 'refs/openchamber-archive/a1', snapshotCommit: 'deadbeef', phase: 'finalizing', revision: 3,
+   sessions: [], expectedFingerprint: malformed, restoreCasCompleted: 1,
+  };
+  const owner = { key: { hostProjectId: 'host', archiveId: 'a1' }, claimId: 'claim', binding };
+  const archiveSessions = {
+   prepareWorktreeArchiveRestore: async () => owner,
+   releaseWorktreeArchiveRestore: async () => { },
+   cleanupWorktreeArchiveRestore: async () => { },
+  };
+  await expect(restoreWorktreeArchiveService(linked, { id: 'a1' }, { archiveSessions })).rejects.toMatchObject({ code: 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', status: 409 });
+  const sound = { ...binding, expectedFingerprint: JSON.stringify(fingerprint) };
+  const soundOwner = { ...owner, binding: sound };
+  const soundSessions = {
+   prepareWorktreeArchiveRestore: async () => soundOwner,
+   releaseWorktreeArchiveRestore: async () => { },
+   cleanupWorktreeArchiveRestore: async () => { },
+  };
+  await expect(restoreWorktreeArchiveService(linked, { id: 'a1' }, { archiveSessions: soundSessions })).resolves.toMatchObject({ id: 'a1', conflicts: false });
+ });
+
  it('archives a worktree with its changes and restores them into a new checkout of the branch', async () => {
   if (!canRunGit()) return;
   const { repo, linked } = createArchivableWorktree();
@@ -5749,14 +5776,14 @@ describe.runIf(canRunGit())('continuing a conflicted rebase or merge', () => {
   const exited = once(child, 'exit');
   const refusal = Object.assign(new Error('The session still has an active run'), { status: 409 });
   const acquire = vi.fn()
-    .mockRejectedValueOnce(refusal)
-    .mockImplementationOnce(async (directory) => {
-      expect(fs.realpathSync(directory)).toBe(fs.realpathSync(checkout));
-      expect(runGit(repo, ['worktree', 'list', '--porcelain'])).toContain('refs/heads/linked');
-      child.stdin.end();
-      await exited;
-    });
-  const release = vi.fn(async () => {});
+   .mockRejectedValueOnce(refusal)
+   .mockImplementationOnce(async (directory) => {
+    expect(fs.realpathSync(directory)).toBe(fs.realpathSync(checkout));
+    expect(runGit(repo, ['worktree', 'list', '--porcelain'])).toContain('refs/heads/linked');
+    child.stdin.end();
+    await exited;
+   });
+  const release = vi.fn(async () => { });
   const options = { removalWorkers: { acquire, release } };
   try {
    await once(child.stdout, 'data');
@@ -6567,418 +6594,418 @@ describe.runIf(canRunGit())('Git revision arguments', () => {
 const listed = (files) => files.map(({ path: filePath, status }) => ({ path: filePath, status }));
 
 describe.runIf(canRunGit())('getRangeDiff', () => {
-  it('loads a committed deletion that no longer exists in HEAD or the working tree', async () => {
-    const { repository } = createRepositoryWithRemote();
-    runGit(repository, ['rm', 'README.md']);
-    runGit(repository, ['commit', '-m', 'delete file']);
-    const diff = await getRangeDiff(repository, { base: 'origin/react', head: 'next', path: 'README.md', includeWorkingTree: true });
-    expect(diff).toContain('deleted file mode');
-    expect(diff).toContain('-# Test');
+ it('loads a committed deletion that no longer exists in HEAD or the working tree', async () => {
+  const { repository } = createRepositoryWithRemote();
+  runGit(repository, ['rm', 'README.md']);
+  runGit(repository, ['commit', '-m', 'delete file']);
+  const diff = await getRangeDiff(repository, { base: 'origin/react', head: 'next', path: 'README.md', includeWorkingTree: true });
+  expect(diff).toContain('deleted file mode');
+  expect(diff).toContain('-# Test');
+ });
+
+ it('reads a rename whose source name holds pathspec characters as that one file', async () => {
+  const { repository } = createRepositoryWithRemote();
+  fs.writeFileSync(path.join(repository, 'a[1].txt'), 'bracket source\nline two\nline three\n');
+  fs.writeFileSync(path.join(repository, 'a1.txt'), 'unrelated\n');
+  runGit(repository, ['add', '.']);
+  runGit(repository, ['commit', '-m', 'sources']);
+  runGit(repository, ['branch', 'rename-base']);
+  runGit(repository, ['mv', 'a[1].txt', 'moved.txt']);
+  // `a[1].txt` read as a pattern matches this file too.
+  fs.writeFileSync(path.join(repository, 'a1.txt'), 'unrelated edit\n');
+  runGit(repository, ['add', '.']);
+  runGit(repository, ['commit', '-m', 'rename']);
+  const base = { base: 'refs/heads/rename-base', head: 'next', previousPath: 'a[1].txt' };
+
+  for (const includeWorkingTree of [false, true]) {
+   const diff = await getRangeDiff(repository, { ...base, path: 'moved.txt', includeWorkingTree });
+   expect(diff).toContain('rename from a[1].txt');
+   expect(diff).toContain('rename to moved.txt');
+   expect(diff).not.toContain('a1.txt');
+  }
+
+  // Moved again without staging: the destination is untracked, so the
+  // comparison runs on a temporary index, next to an untracked look-alike.
+  fs.renameSync(path.join(repository, 'moved.txt'), path.join(repository, 'b[2].txt'));
+  fs.writeFileSync(path.join(repository, 'b2.txt'), 'look-alike\n');
+  const diff = await getRangeDiff(repository, { ...base, path: 'b[2].txt', includeWorkingTree: true });
+  expect(diff).toContain('rename from a[1].txt');
+  expect(diff).toContain('rename to b[2].txt');
+  expect(diff).not.toContain('a1.txt');
+  expect(diff).not.toContain('b2.txt');
+ });
+
+ it('carries the working-tree option through the actual HTTP route handlers', async () => {
+  const { repository } = createRepositoryWithRemote();
+  fs.writeFileSync(path.join(repository, 'local.txt'), 'current local work\n');
+  const routes = new Map();
+  registerGitRoutes({
+   get: (url, handler) => routes.set(url, handler),
+   post() { },
+   put() { },
+   delete() { },
   });
+  const query = { directory: repository, base: 'origin/react', head: 'next', includeWorkingTree: 'true' };
+  for (const endpoint of ['range-diff', 'range-files']) {
+   let status = 200;
+   let body;
+   const response = {
+    status(value) { status = value; return this; },
+    json(value) { body = value; },
+   };
+   await routes.get(`/api/git/${endpoint}`)({ query }, response);
+   expect(status).toBe(200);
+   if (endpoint === 'range-diff') expect(body.diff).toContain('+current local work');
+   else expect(listed(body.files)).toEqual([{ path: 'local.txt', status: 'A' }]);
+  }
+ });
 
-  it('reads a rename whose source name holds pathspec characters as that one file', async () => {
-    const { repository } = createRepositoryWithRemote();
-    fs.writeFileSync(path.join(repository, 'a[1].txt'), 'bracket source\nline two\nline three\n');
-    fs.writeFileSync(path.join(repository, 'a1.txt'), 'unrelated\n');
-    runGit(repository, ['add', '.']);
-    runGit(repository, ['commit', '-m', 'sources']);
-    runGit(repository, ['branch', 'rename-base']);
-    runGit(repository, ['mv', 'a[1].txt', 'moved.txt']);
-    // `a[1].txt` read as a pattern matches this file too.
-    fs.writeFileSync(path.join(repository, 'a1.txt'), 'unrelated edit\n');
-    runGit(repository, ['add', '.']);
-    runGit(repository, ['commit', '-m', 'rename']);
-    const base = { base: 'refs/heads/rename-base', head: 'next', previousPath: 'a[1].txt' };
+ it('does not treat a branch checked out from its own remote copy as its base', async () => {
+  const { repository } = createRepositoryWithRemote();
+  runGit(repository, ['checkout', '-b', 'react', '--track', 'origin/react']);
+  expect(await getBranchBase(repository, 'react')).toEqual({ base: null });
+  runGit(repository, ['checkout', '--no-track', '-b', 'loose', 'origin/react']);
+  expect(await getBranchBase(repository, 'loose')).toEqual({ base: 'origin/react' });
+ });
 
-    for (const includeWorkingTree of [false, true]) {
-      const diff = await getRangeDiff(repository, { ...base, path: 'moved.txt', includeWorkingTree });
-      expect(diff).toContain('rename from a[1].txt');
-      expect(diff).toContain('rename to moved.txt');
-      expect(diff).not.toContain('a1.txt');
-    }
+ it('keeps a recorded parent through a rebase, where the reflog loses it', async () => {
+  const { repository } = createRepositoryWithRemote();
+  runGit(repository, ['checkout', '-b', 'layer-one', 'origin/react']);
+  runGit(repository, ['checkout', '-b', 'layer-two', 'layer-one']);
+  runGit(repository, ['config', 'branch.layer-two.gh-merge-base', 'layer-one']);
+  fs.writeFileSync(path.join(repository, 'two.txt'), 'two\n');
+  runGit(repository, ['add', '.']);
+  runGit(repository, ['commit', '-m', 'two']);
+  // The lower layer moves on, and the upper one is restacked onto it.
+  runGit(repository, ['checkout', 'layer-one']);
+  fs.writeFileSync(path.join(repository, 'one.txt'), 'one\n');
+  runGit(repository, ['add', '.']);
+  runGit(repository, ['commit', '-m', 'one']);
+  runGit(repository, ['checkout', 'layer-two']);
+  runGit(repository, ['rebase', 'layer-one']);
+  expect(await getBranchBase(repository, 'layer-two')).toEqual({ base: 'layer-one' });
+  // A parent that is only a remote branch here still answers.
+  runGit(repository, ['branch', '-D', 'layer-one']);
+  runGit(repository, ['config', 'branch.layer-two.gh-merge-base', 'react']);
+  expect(await getBranchBase(repository, 'layer-two')).toEqual({ base: 'react' });
+  // A parent that no longer exists gives way to the reflog, which here has nothing.
+  runGit(repository, ['config', 'branch.layer-two.gh-merge-base', 'gone']);
+  expect(await getBranchBase(repository, 'layer-two')).toEqual({ base: null });
+ });
 
-    // Moved again without staging: the destination is untracked, so the
-    // comparison runs on a temporary index, next to an untracked look-alike.
-    fs.renameSync(path.join(repository, 'moved.txt'), path.join(repository, 'b[2].txt'));
-    fs.writeFileSync(path.join(repository, 'b2.txt'), 'look-alike\n');
-    const diff = await getRangeDiff(repository, { ...base, path: 'b[2].txt', includeWorkingTree: true });
-    expect(diff).toContain('rename from a[1].txt');
-    expect(diff).toContain('rename to b[2].txt');
-    expect(diff).not.toContain('a1.txt');
-    expect(diff).not.toContain('b2.txt');
-  });
+ it('moves a stale recorded parent up to the stack layer the branch was restacked onto', async () => {
+  const { repository } = createRepositoryWithRemote();
+  const commit = (name) => {
+   fs.writeFileSync(path.join(repository, `${name}.txt`), `${name}\n`);
+   runGit(repository, ['add', '.']);
+   runGit(repository, ['commit', '-m', name]);
+  };
+  runGit(repository, ['checkout', '-b', 'status-type', 'origin/react']);
+  commit('status');
+  // Stacked the usual way, from the checked-out layer: the reflog says "Created from HEAD".
+  runGit(repository, ['checkout', '-b', 'identity-refresh']);
+  commit('identity');
+  // Made on the bottom layer, then moved onto the middle one by hand.
+  runGit(repository, ['checkout', '-b', 'company-refs', 'status-type']);
+  runGit(repository, ['config', 'branch.company-refs.gh-merge-base', 'status-type']);
+  commit('company');
+  runGit(repository, ['rebase', 'identity-refresh']);
+  expect(await getBranchBase(repository, 'company-refs')).toEqual({ base: 'identity-refresh' });
 
-  it('carries the working-tree option through the actual HTTP route handlers', async () => {
-    const { repository } = createRepositoryWithRemote();
-    fs.writeFileSync(path.join(repository, 'local.txt'), 'current local work\n');
-    const routes = new Map();
-    registerGitRoutes({
-      get: (url, handler) => routes.set(url, handler),
-      post() {},
-      put() {},
-      delete() {},
-    });
-    const query = { directory: repository, base: 'origin/react', head: 'next', includeWorkingTree: 'true' };
-    for (const endpoint of ['range-diff', 'range-files']) {
-      let status = 200;
-      let body;
-      const response = {
-        status(value) { status = value; return this; },
-        json(value) { body = value; },
-      };
-      await routes.get(`/api/git/${endpoint}`)({ query }, response);
-      expect(status).toBe(200);
-      if (endpoint === 'range-diff') expect(body.diff).toContain('+current local work');
-      else expect(listed(body.files)).toEqual([{ path: 'local.txt', status: 'A' }]);
-    }
-  });
+  // With no commits of its own yet, it sits on the middle layer's tip.
+  runGit(repository, ['reset', '--hard', 'identity-refresh']);
+  expect(await getBranchBase(repository, 'company-refs')).toEqual({ base: 'identity-refresh' });
 
-  it('does not treat a branch checked out from its own remote copy as its base', async () => {
-    const { repository } = createRepositoryWithRemote();
-    runGit(repository, ['checkout', '-b', 'react', '--track', 'origin/react']);
-    expect(await getBranchBase(repository, 'react')).toEqual({ base: null });
-    runGit(repository, ['checkout', '--no-track', '-b', 'loose', 'origin/react']);
-    expect(await getBranchBase(repository, 'loose')).toEqual({ base: 'origin/react' });
-  });
+  // A layer made on top of it (recorded, or only in its reflog) is above it, never its base.
+  commit('company');
+  runGit(repository, ['branch', 'backup', 'company-refs']);
+  runGit(repository, ['branch', 'next-layer', 'company-refs']);
+  runGit(repository, ['config', 'branch.next-layer.gh-merge-base', 'company-refs']);
+  // Made from HEAD, its origin is unknown: no evidence of a layer either.
+  runGit(repository, ['switch', '-c', 'head-backup']);
+  runGit(repository, ['switch', 'company-refs']);
+  // A snapshot of a line (`HEAD~1`) is not a branch it was made on.
+  commit('company-more');
+  runGit(repository, ['branch', 'snapshot', 'HEAD~1']);
+  expect(await getBranchBase(repository, 'company-refs')).toEqual({ base: 'identity-refresh' });
 
-  it('keeps a recorded parent through a rebase, where the reflog loses it', async () => {
-    const { repository } = createRepositoryWithRemote();
-    runGit(repository, ['checkout', '-b', 'layer-one', 'origin/react']);
-    runGit(repository, ['checkout', '-b', 'layer-two', 'layer-one']);
-    runGit(repository, ['config', 'branch.layer-two.gh-merge-base', 'layer-one']);
-    fs.writeFileSync(path.join(repository, 'two.txt'), 'two\n');
-    runGit(repository, ['add', '.']);
-    runGit(repository, ['commit', '-m', 'two']);
-    // The lower layer moves on, and the upper one is restacked onto it.
-    runGit(repository, ['checkout', 'layer-one']);
-    fs.writeFileSync(path.join(repository, 'one.txt'), 'one\n');
-    runGit(repository, ['add', '.']);
-    runGit(repository, ['commit', '-m', 'one']);
-    runGit(repository, ['checkout', 'layer-two']);
-    runGit(repository, ['rebase', 'layer-one']);
-    expect(await getBranchBase(repository, 'layer-two')).toEqual({ base: 'layer-one' });
-    // A parent that is only a remote branch here still answers.
-    runGit(repository, ['branch', '-D', 'layer-one']);
-    runGit(repository, ['config', 'branch.layer-two.gh-merge-base', 'react']);
-    expect(await getBranchBase(repository, 'layer-two')).toEqual({ base: 'react' });
-    // A parent that no longer exists gives way to the reflog, which here has nothing.
-    runGit(repository, ['config', 'branch.layer-two.gh-merge-base', 'gone']);
-    expect(await getBranchBase(repository, 'layer-two')).toEqual({ base: null });
-  });
+  // Without a record the reflog's creation source is the lower bound, through the rebase.
+  runGit(repository, ['config', '--unset', 'branch.company-refs.gh-merge-base']);
+  expect(await getBranchBase(repository, 'company-refs')).toEqual({ base: 'identity-refresh' });
 
-  it('moves a stale recorded parent up to the stack layer the branch was restacked onto', async () => {
-    const { repository } = createRepositoryWithRemote();
-    const commit = (name) => {
-      fs.writeFileSync(path.join(repository, `${name}.txt`), `${name}\n`);
-      runGit(repository, ['add', '.']);
-      runGit(repository, ['commit', '-m', name]);
-    };
-    runGit(repository, ['checkout', '-b', 'status-type', 'origin/react']);
-    commit('status');
-    // Stacked the usual way, from the checked-out layer: the reflog says "Created from HEAD".
-    runGit(repository, ['checkout', '-b', 'identity-refresh']);
-    commit('identity');
-    // Made on the bottom layer, then moved onto the middle one by hand.
-    runGit(repository, ['checkout', '-b', 'company-refs', 'status-type']);
-    runGit(repository, ['config', 'branch.company-refs.gh-merge-base', 'status-type']);
-    commit('company');
-    runGit(repository, ['rebase', 'identity-refresh']);
-    expect(await getBranchBase(repository, 'company-refs')).toEqual({ base: 'identity-refresh' });
+  // Two layers at the same commit leave nothing to tell them apart: the record stands.
+  runGit(repository, ['config', 'branch.company-refs.gh-merge-base', 'status-type']);
+  runGit(repository, ['branch', 'twin', 'identity-refresh']);
+  expect(await getBranchBase(repository, 'company-refs')).toEqual({ base: 'status-type' });
+ });
 
-    // With no commits of its own yet, it sits on the middle layer's tip.
-    runGit(repository, ['reset', '--hard', 'identity-refresh']);
-    expect(await getBranchBase(repository, 'company-refs')).toEqual({ base: 'identity-refresh' });
+ it('still finds a layer made from HEAD after the whole stack moved onto a newer base', async () => {
+  const { repository } = createRepositoryWithRemote();
+  const commit = (name) => {
+   fs.writeFileSync(path.join(repository, `${name}.txt`), `${name}\n`);
+   runGit(repository, ['add', '.']);
+   runGit(repository, ['commit', '-m', name]);
+  };
+  runGit(repository, ['checkout', '-b', 'lower', 'next']);
+  commit('lower');
+  runGit(repository, ['checkout', '-b', 'middle']);
+  commit('middle');
+  runGit(repository, ['checkout', '-b', 'upper', 'lower']);
+  runGit(repository, ['config', 'branch.upper.gh-merge-base', 'lower']);
+  commit('upper');
+  runGit(repository, ['rebase', 'middle']);
+  expect(await getBranchBase(repository, 'upper')).toEqual({ base: 'middle' });
 
-    // A layer made on top of it (recorded, or only in its reflog) is above it, never its base.
-    commit('company');
-    runGit(repository, ['branch', 'backup', 'company-refs']);
-    runGit(repository, ['branch', 'next-layer', 'company-refs']);
-    runGit(repository, ['config', 'branch.next-layer.gh-merge-base', 'company-refs']);
-    // Made from HEAD, its origin is unknown: no evidence of a layer either.
-    runGit(repository, ['switch', '-c', 'head-backup']);
-    runGit(repository, ['switch', 'company-refs']);
-    // A snapshot of a line (`HEAD~1`) is not a branch it was made on.
-    commit('company-more');
-    runGit(repository, ['branch', 'snapshot', 'HEAD~1']);
-    expect(await getBranchBase(repository, 'company-refs')).toEqual({ base: 'identity-refresh' });
+  runGit(repository, ['checkout', 'next']);
+  commit('main-moves');
+  for (const [branch, onto] of [['lower', 'next'], ['middle', 'lower'], ['upper', 'middle']]) {
+   runGit(repository, ['checkout', branch]);
+   runGit(repository, ['rebase', onto]);
+  }
+  expect(await getBranchBase(repository, 'upper')).toEqual({ base: 'middle' });
+ });
 
-    // Without a record the reflog's creation source is the lower bound, through the rebase.
-    runGit(repository, ['config', '--unset', 'branch.company-refs.gh-merge-base']);
-    expect(await getBranchBase(repository, 'company-refs')).toEqual({ base: 'identity-refresh' });
+ it('keeps the parent of a branch that merged a sibling in from the side', async () => {
+  const { repository } = createRepositoryWithRemote();
+  const commit = (name) => {
+   fs.writeFileSync(path.join(repository, `${name}.txt`), `${name}\n`);
+   runGit(repository, ['add', '.']);
+   runGit(repository, ['commit', '-m', name]);
+  };
+  runGit(repository, ['checkout', '-b', 'sibling', 'origin/react']);
+  commit('sibling');
+  runGit(repository, ['checkout', '-b', 'feature', 'origin/react']);
+  runGit(repository, ['config', 'branch.feature.gh-merge-base', 'react']);
+  commit('feature');
+  runGit(repository, ['merge', '--no-edit', 'sibling']);
+  expect(await getBranchBase(repository, 'feature')).toEqual({ base: 'react' });
+ });
 
-    // Two layers at the same commit leave nothing to tell them apart: the record stands.
-    runGit(repository, ['config', 'branch.company-refs.gh-merge-base', 'status-type']);
-    runGit(repository, ['branch', 'twin', 'identity-refresh']);
-    expect(await getBranchBase(repository, 'company-refs')).toEqual({ base: 'status-type' });
-  });
+ it('records the parent of a rebase finished after a conflict, and none for an aborted one', async () => {
+  const { repository } = createRepositoryWithRemote();
+  const write = (content) => {
+   fs.writeFileSync(path.join(repository, 'shared.txt'), `${content}\n`);
+   runGit(repository, ['add', '.']);
+   runGit(repository, ['commit', '-m', content]);
+  };
+  runGit(repository, ['checkout', '-b', 'new-parent', 'origin/react']);
+  write('parent');
+  runGit(repository, ['checkout', '-b', 'upper', 'origin/react']);
+  runGit(repository, ['config', 'branch.upper.gh-merge-base', 'react']);
+  write('upper');
 
-  it('still finds a layer made from HEAD after the whole stack moved onto a newer base', async () => {
-    const { repository } = createRepositoryWithRemote();
-    const commit = (name) => {
-      fs.writeFileSync(path.join(repository, `${name}.txt`), `${name}\n`);
-      runGit(repository, ['add', '.']);
-      runGit(repository, ['commit', '-m', name]);
-    };
-    runGit(repository, ['checkout', '-b', 'lower', 'next']);
-    commit('lower');
-    runGit(repository, ['checkout', '-b', 'middle']);
-    commit('middle');
-    runGit(repository, ['checkout', '-b', 'upper', 'lower']);
-    runGit(repository, ['config', 'branch.upper.gh-merge-base', 'lower']);
-    commit('upper');
-    runGit(repository, ['rebase', 'middle']);
-    expect(await getBranchBase(repository, 'upper')).toEqual({ base: 'middle' });
+  expect(await rebase(repository, { onto: 'new-parent' })).toMatchObject({ conflict: true });
+  await abortRebase(repository);
+  expect(readBranchConfig(repository, 'upper', 'gh-merge-base')).toBe('react');
 
-    runGit(repository, ['checkout', 'next']);
-    commit('main-moves');
-    for (const [branch, onto] of [['lower', 'next'], ['middle', 'lower'], ['upper', 'middle']]) {
-      runGit(repository, ['checkout', branch]);
-      runGit(repository, ['rebase', onto]);
-    }
-    expect(await getBranchBase(repository, 'upper')).toEqual({ base: 'middle' });
-  });
+  expect(await rebase(repository, { onto: 'new-parent' })).toMatchObject({ conflict: true });
+  expect(readBranchConfig(repository, 'upper', 'gh-merge-base')).toBe('react');
+  fs.writeFileSync(path.join(repository, 'shared.txt'), 'resolved\n');
+  runGit(repository, ['add', 'shared.txt']);
+  expect(await continueRebase(repository)).toMatchObject({ success: true });
+  expect(readBranchConfig(repository, 'upper', 'gh-merge-base')).toBe('new-parent');
+ });
 
-  it('keeps the parent of a branch that merged a sibling in from the side', async () => {
-    const { repository } = createRepositoryWithRemote();
-    const commit = (name) => {
-      fs.writeFileSync(path.join(repository, `${name}.txt`), `${name}\n`);
-      runGit(repository, ['add', '.']);
-      runGit(repository, ['commit', '-m', name]);
-    };
-    runGit(repository, ['checkout', '-b', 'sibling', 'origin/react']);
-    commit('sibling');
-    runGit(repository, ['checkout', '-b', 'feature', 'origin/react']);
-    runGit(repository, ['config', 'branch.feature.gh-merge-base', 'react']);
-    commit('feature');
-    runGit(repository, ['merge', '--no-edit', 'sibling']);
-    expect(await getBranchBase(repository, 'feature')).toEqual({ base: 'react' });
-  });
+ it('records the branch a rebase lands on as the parent, and nothing for a commit', async () => {
+  const { repository } = createRepositoryWithRemote();
+  runGit(repository, ['checkout', '-b', 'lower', 'origin/react']);
+  fs.writeFileSync(path.join(repository, 'lower.txt'), 'lower\n');
+  runGit(repository, ['add', '.']);
+  runGit(repository, ['commit', '-m', 'lower']);
+  runGit(repository, ['checkout', '-b', 'upper', 'origin/react']);
+  runGit(repository, ['config', 'branch.upper.gh-merge-base', 'react']);
 
-  it('records the parent of a rebase finished after a conflict, and none for an aborted one', async () => {
-    const { repository } = createRepositoryWithRemote();
-    const write = (content) => {
-      fs.writeFileSync(path.join(repository, 'shared.txt'), `${content}\n`);
-      runGit(repository, ['add', '.']);
-      runGit(repository, ['commit', '-m', content]);
-    };
-    runGit(repository, ['checkout', '-b', 'new-parent', 'origin/react']);
-    write('parent');
-    runGit(repository, ['checkout', '-b', 'upper', 'origin/react']);
-    runGit(repository, ['config', 'branch.upper.gh-merge-base', 'react']);
-    write('upper');
+  expect(await rebase(repository, { onto: 'lower' })).toMatchObject({ success: true });
+  expect(readBranchConfig(repository, 'upper', 'gh-merge-base')).toBe('lower');
 
-    expect(await rebase(repository, { onto: 'new-parent' })).toMatchObject({ conflict: true });
-    await abortRebase(repository);
-    expect(readBranchConfig(repository, 'upper', 'gh-merge-base')).toBe('react');
+  expect(await rebase(repository, { onto: 'origin/react' })).toMatchObject({ success: true });
+  expect(readBranchConfig(repository, 'upper', 'gh-merge-base')).toBe('react');
 
-    expect(await rebase(repository, { onto: 'new-parent' })).toMatchObject({ conflict: true });
-    expect(readBranchConfig(repository, 'upper', 'gh-merge-base')).toBe('react');
-    fs.writeFileSync(path.join(repository, 'shared.txt'), 'resolved\n');
-    runGit(repository, ['add', 'shared.txt']);
-    expect(await continueRebase(repository)).toMatchObject({ success: true });
-    expect(readBranchConfig(repository, 'upper', 'gh-merge-base')).toBe('new-parent');
-  });
+  const commit = runGit(repository, ['rev-parse', 'lower']).trim();
+  expect(await rebase(repository, { onto: commit })).toMatchObject({ success: true });
+  expect(readBranchConfig(repository, 'upper', 'gh-merge-base')).toBe('react');
+ });
 
-  it('records the branch a rebase lands on as the parent, and nothing for a commit', async () => {
-    const { repository } = createRepositoryWithRemote();
-    runGit(repository, ['checkout', '-b', 'lower', 'origin/react']);
-    fs.writeFileSync(path.join(repository, 'lower.txt'), 'lower\n');
-    runGit(repository, ['add', '.']);
-    runGit(repository, ['commit', '-m', 'lower']);
-    runGit(repository, ['checkout', '-b', 'upper', 'origin/react']);
-    runGit(repository, ['config', 'branch.upper.gh-merge-base', 'react']);
+ it('finds the layer a branch was restacked onto, and compares against the selected parent', async () => {
+  const { repository } = createRepositoryWithRemote();
+  runGit(repository, ['checkout', '-b', 'child', 'origin/react']);
+  fs.writeFileSync(path.join(repository, 'child.txt'), 'child\n');
+  runGit(repository, ['add', '.']);
+  runGit(repository, ['commit', '-m', 'child']);
+  expect(await getBranchBase(repository, 'child')).toEqual({ base: 'origin/react' });
+  runGit(repository, ['checkout', '-b', 'parent', 'origin/react']);
+  fs.writeFileSync(path.join(repository, 'parent.txt'), 'parent\n');
+  runGit(repository, ['add', '.']);
+  runGit(repository, ['commit', '-m', 'parent']);
+  runGit(repository, ['checkout', 'child']);
+  runGit(repository, ['rebase', 'parent']);
+  expect(await getBranchBase(repository, 'child')).toEqual({ base: 'parent' });
+  // Rebased with no branch left between it and its creation source: no answer.
+  runGit(repository, ['branch', '-D', 'parent']);
+  expect(await getBranchBase(repository, 'child')).toEqual({ base: null });
+  runGit(repository, ['branch', 'parent', 'HEAD~1']);
+  fs.writeFileSync(path.join(repository, 'child.txt'), 'current child\n');
+  const options = { base: 'refs/heads/parent', head: 'child', includeWorkingTree: true };
+  expect(listed(await getRangeFiles(repository, options))).toEqual([{ path: 'child.txt', status: 'A' }]);
+  const diff = await getRangeDiff(repository, options);
+  expect(diff).toContain('+current child');
+  expect(diff).not.toContain('parent.txt');
+ });
 
-    expect(await rebase(repository, { onto: 'lower' })).toMatchObject({ success: true });
-    expect(readBranchConfig(repository, 'upper', 'gh-merge-base')).toBe('lower');
+ it('combines committed, staged, unstaged and untracked work without changing the real index', async () => {
+  const { repository } = createRepositoryWithRemote();
+  fs.writeFileSync(path.join(repository, 'README.md'), '# Committed\n');
+  runGit(repository, ['add', 'README.md']);
+  runGit(repository, ['commit', '-m', 'branch change']);
+  fs.writeFileSync(path.join(repository, 'README.md'), '# Staged\n');
+  fs.writeFileSync(path.join(repository, 'staged.txt'), 'staged only\n');
+  runGit(repository, ['add', '.']);
+  fs.writeFileSync(path.join(repository, 'README.md'), '# Current\n');
+  fs.writeFileSync(path.join(repository, 'untracked.txt'), 'new local file\n');
+  fs.writeFileSync(path.join(repository, ' leading space.txt'), 'space path\n');
+  const indexBefore = fs.readFileSync(path.join(repository, '.git/index'));
+  const options = { base: 'origin/react', head: 'next', includeWorkingTree: true };
 
-    expect(await rebase(repository, { onto: 'origin/react' })).toMatchObject({ success: true });
-    expect(readBranchConfig(repository, 'upper', 'gh-merge-base')).toBe('react');
+  const diff = await getRangeDiff(repository, options);
+  expect(diff).toContain('-# Test');
+  expect(diff).toContain('+# Current');
+  expect(diff).not.toContain('+# Staged');
+  expect(diff).not.toContain('+# Committed');
+  expect(diff).toContain('+new local file');
+  expect(diff).toContain('+staged only');
+  expect(listed(await getRangeFiles(repository, options))).toEqual(expect.arrayContaining([
+   { path: 'README.md', status: 'M' },
+   { path: 'staged.txt', status: 'A' },
+   { path: 'untracked.txt', status: 'A' },
+   { path: ' leading space.txt', status: 'A' },
+  ]));
+  const { sections } = await loadSourceSections(repository, { kind: 'branch', baseRef: options.base, headRef: options.head });
+  expect(sections).toEqual([{ scope: 'branch', patch: diff }]);
+  expect(fs.readFileSync(path.join(repository, '.git/index'))).toEqual(indexBefore);
 
-    const commit = runGit(repository, ['rev-parse', 'lower']).trim();
-    expect(await rebase(repository, { onto: commit })).toMatchObject({ success: true });
-    expect(readBranchConfig(repository, 'upper', 'gh-merge-base')).toBe('react');
-  });
+  const committed = await getRangeDiff(repository, { base: options.base, head: options.head });
+  expect(committed).toContain('+# Committed');
+  expect(committed).not.toContain('+new local file');
+  fs.writeFileSync(path.join(repository, 'README.md'), '# Latest\n');
+  expect(await getRangeDiff(repository, { ...options, path: 'README.md' })).toContain('+# Latest');
+ });
 
-  it('finds the layer a branch was restacked onto, and compares against the selected parent', async () => {
-    const { repository } = createRepositoryWithRemote();
-    runGit(repository, ['checkout', '-b', 'child', 'origin/react']);
-    fs.writeFileSync(path.join(repository, 'child.txt'), 'child\n');
-    runGit(repository, ['add', '.']);
-    runGit(repository, ['commit', '-m', 'child']);
-    expect(await getBranchBase(repository, 'child')).toEqual({ base: 'origin/react' });
-    runGit(repository, ['checkout', '-b', 'parent', 'origin/react']);
-    fs.writeFileSync(path.join(repository, 'parent.txt'), 'parent\n');
-    runGit(repository, ['add', '.']);
-    runGit(repository, ['commit', '-m', 'parent']);
-    runGit(repository, ['checkout', 'child']);
-    runGit(repository, ['rebase', 'parent']);
-    expect(await getBranchBase(repository, 'child')).toEqual({ base: 'parent' });
-    // Rebased with no branch left between it and its creation source: no answer.
-    runGit(repository, ['branch', '-D', 'parent']);
-    expect(await getBranchBase(repository, 'child')).toEqual({ base: null });
-    runGit(repository, ['branch', 'parent', 'HEAD~1']);
-    fs.writeFileSync(path.join(repository, 'child.txt'), 'current child\n');
-    const options = { base: 'refs/heads/parent', head: 'child', includeWorkingTree: true };
-    expect(listed(await getRangeFiles(repository, options))).toEqual([{ path: 'child.txt', status: 'A' }]);
-    const diff = await getRangeDiff(repository, options);
-    expect(diff).toContain('+current child');
-    expect(diff).not.toContain('parent.txt');
-  });
+ it('reports the final file after a staged deletion is recreated, and omits undone branch changes', async () => {
+  const { repository } = createRepositoryWithRemote();
+  runGit(repository, ['rm', 'README.md']);
+  fs.writeFileSync(path.join(repository, 'README.md'), '# Recreated\n');
+  const options = { base: 'origin/react', head: 'next', includeWorkingTree: true };
+  expect(listed(await getRangeFiles(repository, options))).toEqual([{ path: 'README.md', status: 'M' }]);
+  const diff = await getRangeDiff(repository, options);
+  expect(diff).toContain('-# Test');
+  expect(diff).toContain('+# Recreated');
+  expect(diff.match(/diff --git/g)).toHaveLength(1);
+  fs.writeFileSync(path.join(repository, 'README.md'), '# Test\n');
+  expect(listed(await getRangeFiles(repository, options))).toEqual([]);
+  expect(await getRangeDiff(repository, options)).toBe('');
+ });
 
-  it('combines committed, staged, unstaged and untracked work without changing the real index', async () => {
-    const { repository } = createRepositoryWithRemote();
-    fs.writeFileSync(path.join(repository, 'README.md'), '# Committed\n');
-    runGit(repository, ['add', 'README.md']);
-    runGit(repository, ['commit', '-m', 'branch change']);
-    fs.writeFileSync(path.join(repository, 'README.md'), '# Staged\n');
-    fs.writeFileSync(path.join(repository, 'staged.txt'), 'staged only\n');
-    runGit(repository, ['add', '.']);
-    fs.writeFileSync(path.join(repository, 'README.md'), '# Current\n');
-    fs.writeFileSync(path.join(repository, 'untracked.txt'), 'new local file\n');
-    fs.writeFileSync(path.join(repository, ' leading space.txt'), 'space path\n');
-    const indexBefore = fs.readFileSync(path.join(repository, '.git/index'));
-    const options = { base: 'origin/react', head: 'next', includeWorkingTree: true };
+ it('gives each working-tree file a revision that moves only when its patch can change', async () => {
+  const { repository } = createRepositoryWithRemote();
+  runGit(repository, ['branch', 'react']);
+  fs.writeFileSync(path.join(repository, 'a.txt'), 'one\n');
+  fs.writeFileSync(path.join(repository, 'b.txt'), 'two\n');
+  const options = { base: 'react', head: 'next', includeWorkingTree: true };
+  const revisions = async () => Object.fromEntries((await getRangeFiles(repository, options)).map((file) => [file.path, file.revision]));
 
-    const diff = await getRangeDiff(repository, options);
-    expect(diff).toContain('-# Test');
-    expect(diff).toContain('+# Current');
-    expect(diff).not.toContain('+# Staged');
-    expect(diff).not.toContain('+# Committed');
-    expect(diff).toContain('+new local file');
-    expect(diff).toContain('+staged only');
-    expect(listed(await getRangeFiles(repository, options))).toEqual(expect.arrayContaining([
-      { path: 'README.md', status: 'M' },
-      { path: 'staged.txt', status: 'A' },
-      { path: 'untracked.txt', status: 'A' },
-      { path: ' leading space.txt', status: 'A' },
-    ]));
-    const { sections } = await loadSourceSections(repository, { kind: 'branch', baseRef: options.base, headRef: options.head });
-    expect(sections).toEqual([{ scope: 'branch', patch: diff }]);
-    expect(fs.readFileSync(path.join(repository, '.git/index'))).toEqual(indexBefore);
+  const first = await revisions();
+  expect(await revisions()).toEqual(first);
 
-    const committed = await getRangeDiff(repository, { base: options.base, head: options.head });
-    expect(committed).toContain('+# Committed');
-    expect(committed).not.toContain('+new local file');
-    fs.writeFileSync(path.join(repository, 'README.md'), '# Latest\n');
-    expect(await getRangeDiff(repository, { ...options, path: 'README.md' })).toContain('+# Latest');
-  });
+  // Same size, same line counts: only the write itself tells the patch apart.
+  fs.writeFileSync(path.join(repository, 'a.txt'), 'uno\n');
+  const edited = await revisions();
+  expect(edited['a.txt']).not.toBe(first['a.txt']);
+  expect(edited['b.txt']).toBe(first['b.txt']);
 
-  it('reports the final file after a staged deletion is recreated, and omits undone branch changes', async () => {
-    const { repository } = createRepositoryWithRemote();
-    runGit(repository, ['rm', 'README.md']);
-    fs.writeFileSync(path.join(repository, 'README.md'), '# Recreated\n');
-    const options = { base: 'origin/react', head: 'next', includeWorkingTree: true };
-    expect(listed(await getRangeFiles(repository, options))).toEqual([{ path: 'README.md', status: 'M' }]);
-    const diff = await getRangeDiff(repository, options);
-    expect(diff).toContain('-# Test');
-    expect(diff).toContain('+# Recreated');
-    expect(diff.match(/diff --git/g)).toHaveLength(1);
-    fs.writeFileSync(path.join(repository, 'README.md'), '# Test\n');
-    expect(listed(await getRangeFiles(repository, options))).toEqual([]);
-    expect(await getRangeDiff(repository, options)).toBe('');
-  });
+  // A commit that keeps the content keeps the patch against the merge base.
+  runGit(repository, ['add', 'a.txt']);
+  runGit(repository, ['commit', '-m', 'a']);
+  expect(await revisions()).toEqual(edited);
 
-  it('gives each working-tree file a revision that moves only when its patch can change', async () => {
-    const { repository } = createRepositoryWithRemote();
-    runGit(repository, ['branch', 'react']);
-    fs.writeFileSync(path.join(repository, 'a.txt'), 'one\n');
-    fs.writeFileSync(path.join(repository, 'b.txt'), 'two\n');
-    const options = { base: 'react', head: 'next', includeWorkingTree: true };
-    const revisions = async () => Object.fromEntries((await getRangeFiles(repository, options)).map((file) => [file.path, file.revision]));
+  // The base moving to that commit changes the merge base, so every patch.
+  runGit(repository, ['branch', '-f', 'react', 'HEAD']);
+  const moved = await revisions();
+  expect(moved['a.txt']).toBeUndefined();
+  expect(moved['b.txt']).not.toBe(edited['b.txt']);
+ });
 
-    const first = await revisions();
-    expect(await revisions()).toEqual(first);
+ it('keeps local and remote bases distinct and rejects a different checked-out branch', async () => {
+  const { repository } = createRepositoryWithRemote();
+  runGit(repository, ['branch', 'react']);
+  fs.writeFileSync(path.join(repository, 'parent.txt'), 'parent work\n');
+  runGit(repository, ['add', '.']);
+  runGit(repository, ['commit', '-m', 'parent work']);
+  runGit(repository, ['branch', '-f', 'react', 'HEAD']);
+  fs.writeFileSync(path.join(repository, 'child.txt'), 'child work\n');
+  const options = { head: 'next', includeWorkingTree: true };
+  const local = await getRangeDiff(repository, { ...options, base: 'react' });
+  const remote = await getRangeDiff(repository, { ...options, base: 'origin/react' });
+  expect(local).not.toContain('parent.txt');
+  expect(remote).toContain('parent.txt');
+  expect(local).toContain('child.txt');
+  expect(listed(await getRangeFiles(repository, { ...options, base: 'react' }))).toEqual([{ path: 'child.txt', status: 'A' }]);
+  runGit(repository, ['checkout', 'react']);
+  await expect(getRangeDiff(repository, { ...options, base: 'origin/react' })).rejects.toThrow(/checked-out branch/);
+ });
 
-    // Same size, same line counts: only the write itself tells the patch apart.
-    fs.writeFileSync(path.join(repository, 'a.txt'), 'uno\n');
-    const edited = await revisions();
-    expect(edited['a.txt']).not.toBe(first['a.txt']);
-    expect(edited['b.txt']).toBe(first['b.txt']);
+ it('includes untracked symlinks as links without reading their targets', async () => {
+  const { repository } = createRepositoryWithRemote();
+  const outside = path.join(createTempDir(), 'outside.txt');
+  fs.writeFileSync(outside, 'must not be in a diff\n');
+  const link = path.join(repository, 'link.txt');
+  fs.symlinkSync(outside, link);
+  const diff = await getRangeDiff(repository, { base: 'origin/react', head: 'next', includeWorkingTree: true });
+  expect(diff).toContain('new file mode 120000');
+  expect(diff).toContain(fs.readlinkSync(link).split(path.sep).join('/'));
+  expect(diff).not.toContain('must not be in a diff');
+ });
 
-    // A commit that keeps the content keeps the patch against the merge base.
-    runGit(repository, ['add', 'a.txt']);
-    runGit(repository, ['commit', '-m', 'a']);
-    expect(await revisions()).toEqual(edited);
+ it('uses an explicitly selected base on a remote other than origin', async () => {
+  const { repository } = createRepositoryWithRemote({ remoteName: 'upstream', defaultBranch: 'react' });
+  // The selected remote ref must work without a local branch of that name.
+  fs.writeFileSync(path.join(repository, 'feature.txt'), 'work\n');
+  runGit(repository, ['add', 'feature.txt']);
+  runGit(repository, ['commit', '-m', 'feature']);
 
-    // The base moving to that commit changes the merge base, so every patch.
-    runGit(repository, ['branch', '-f', 'react', 'HEAD']);
-    const moved = await revisions();
-    expect(moved['a.txt']).toBeUndefined();
-    expect(moved['b.txt']).not.toBe(edited['b.txt']);
-  });
+  const diff = await getRangeDiff(repository, { base: 'upstream/react', head: 'next' });
 
-  it('keeps local and remote bases distinct and rejects a different checked-out branch', async () => {
-    const { repository } = createRepositoryWithRemote();
-    runGit(repository, ['branch', 'react']);
-    fs.writeFileSync(path.join(repository, 'parent.txt'), 'parent work\n');
-    runGit(repository, ['add', '.']);
-    runGit(repository, ['commit', '-m', 'parent work']);
-    runGit(repository, ['branch', '-f', 'react', 'HEAD']);
-    fs.writeFileSync(path.join(repository, 'child.txt'), 'child work\n');
-    const options = { head: 'next', includeWorkingTree: true };
-    const local = await getRangeDiff(repository, { ...options, base: 'react' });
-    const remote = await getRangeDiff(repository, { ...options, base: 'origin/react' });
-    expect(local).not.toContain('parent.txt');
-    expect(remote).toContain('parent.txt');
-    expect(local).toContain('child.txt');
-    expect(listed(await getRangeFiles(repository, { ...options, base: 'react' }))).toEqual([{ path: 'child.txt', status: 'A' }]);
-    runGit(repository, ['checkout', 'react']);
-    await expect(getRangeDiff(repository, { ...options, base: 'origin/react' })).rejects.toThrow(/checked-out branch/);
-  });
+  expect(diff).toContain('feature.txt');
+  await expect(getRangeDiff(repository, { base: 'react', head: 'next' })).rejects.toThrow(/is not available locally/);
+ });
 
-  it('includes untracked symlinks as links without reading their targets', async () => {
-    const { repository } = createRepositoryWithRemote();
-    const outside = path.join(createTempDir(), 'outside.txt');
-    fs.writeFileSync(outside, 'must not be in a diff\n');
-    const link = path.join(repository, 'link.txt');
-    fs.symlinkSync(outside, link);
-    const diff = await getRangeDiff(repository, { base: 'origin/react', head: 'next', includeWorkingTree: true });
-    expect(diff).toContain('new file mode 120000');
-    expect(diff).toContain(fs.readlinkSync(link).split(path.sep).join('/'));
-    expect(diff).not.toContain('must not be in a diff');
-  });
+ it('names an unfetched remote-only ref instead of failing with git\'s ambiguous argument (#2735)', async () => {
+  const { repository } = createRepositoryWithRemote({ defaultBranch: 'react' });
 
-  it('uses an explicitly selected base on a remote other than origin', async () => {
-    const { repository } = createRepositoryWithRemote({ remoteName: 'upstream', defaultBranch: 'react' });
-    // The selected remote ref must work without a local branch of that name.
-    fs.writeFileSync(path.join(repository, 'feature.txt'), 'work\n');
-    runGit(repository, ['add', 'feature.txt']);
-    runGit(repository, ['commit', '-m', 'feature']);
+  await expect(
+   getRangeDiff(repository, { base: 'remotes/origin/never-fetched', head: 'next' })
+  ).rejects.toThrow(/is not available locally/);
+ });
 
-    const diff = await getRangeDiff(repository, { base: 'upstream/react', head: 'next' });
+ it('fetches an unfetched remote base branch before comparing, as for a stacked pull request', async () => {
+  const { repository } = createRepositoryWithRemote({ defaultBranch: 'react' });
+  // The parent branch of the stack is on the remote, but this clone never fetched it.
+  runGit(repository, ['checkout', '-b', 'parent']);
+  fs.writeFileSync(path.join(repository, 'parent.txt'), 'parent\n');
+  runGit(repository, ['add', 'parent.txt']);
+  runGit(repository, ['commit', '-m', 'parent']);
+  runGit(repository, ['push', 'origin', 'parent']);
+  runGit(repository, ['update-ref', '-d', 'refs/remotes/origin/parent']);
+  runGit(repository, ['checkout', '-b', 'child']);
+  runGit(repository, ['branch', '-D', 'parent']);
+  fs.writeFileSync(path.join(repository, 'child.txt'), 'child\n');
+  runGit(repository, ['add', 'child.txt']);
+  runGit(repository, ['commit', '-m', 'child']);
 
-    expect(diff).toContain('feature.txt');
-    await expect(getRangeDiff(repository, { base: 'react', head: 'next' })).rejects.toThrow(/is not available locally/);
-  });
+  const files = await getRangeFiles(repository, { base: 'origin/parent', head: 'child' });
 
-  it('names an unfetched remote-only ref instead of failing with git\'s ambiguous argument (#2735)', async () => {
-    const { repository } = createRepositoryWithRemote({ defaultBranch: 'react' });
-
-    await expect(
-      getRangeDiff(repository, { base: 'remotes/origin/never-fetched', head: 'next' })
-    ).rejects.toThrow(/is not available locally/);
-  });
-
-  it('fetches an unfetched remote base branch before comparing, as for a stacked pull request', async () => {
-    const { repository } = createRepositoryWithRemote({ defaultBranch: 'react' });
-    // The parent branch of the stack is on the remote, but this clone never fetched it.
-    runGit(repository, ['checkout', '-b', 'parent']);
-    fs.writeFileSync(path.join(repository, 'parent.txt'), 'parent\n');
-    runGit(repository, ['add', 'parent.txt']);
-    runGit(repository, ['commit', '-m', 'parent']);
-    runGit(repository, ['push', 'origin', 'parent']);
-    runGit(repository, ['update-ref', '-d', 'refs/remotes/origin/parent']);
-    runGit(repository, ['checkout', '-b', 'child']);
-    runGit(repository, ['branch', '-D', 'parent']);
-    fs.writeFileSync(path.join(repository, 'child.txt'), 'child\n');
-    runGit(repository, ['add', 'child.txt']);
-    runGit(repository, ['commit', '-m', 'child']);
-
-    const files = await getRangeFiles(repository, { base: 'origin/parent', head: 'child' });
-
-    expect(files.map((file) => file.path)).toEqual(['child.txt']);
-    expect(await getRangeDiff(repository, { base: 'origin/parent', head: 'child' })).not.toContain('parent.txt');
-  });
+  expect(files.map((file) => file.path)).toEqual(['child.txt']);
+  expect(await getRangeDiff(repository, { base: 'origin/parent', head: 'child' })).not.toContain('parent.txt');
+ });
 });
 
 describe('parseBranchCreationSource', () => {

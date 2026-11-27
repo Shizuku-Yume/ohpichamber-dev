@@ -1,12 +1,20 @@
 import express from 'express';
+import { z } from 'zod';
 import { normalizeCustomOpenAIBaseURL, normalizeSelectedOpenAIBaseURL } from './base-url.js';
 import { summarizeText, sanitizeForTTS, sanitizeForNote } from '../text/summarization.js';
-
 import { detectTextLanguage, languageOfLocale, pickVoiceForLanguage } from './language-detect.js';
 import { ENTERPRISE_MODE_ERROR, isEnterpriseMode } from '../enterprise-mode.js';
 import { describeVoiceKeys, readVoiceKey, updateVoiceKeys, voiceKeysPatchSchema } from './voice-keys.js';
-import { z } from "zod";
+import { isRecord } from '../shared/guards.js';
+import type { Application, Request } from '../shared/http-contracts.js';
+import type { SayTtsCapability } from './capability-runtime.js';
+import type { TTSSelectionOptions, TTSService } from './service.js';
 
+export interface TtsRoutesDependencies {
+  sayTTSCapability: Promise<SayTtsCapability> | SayTtsCapability | null;
+  ttsService: Pick<TTSService, 'isAvailable' | 'generateSpeechStream'>;
+  resolveTtsSelection: (req: Request) => Promise<TTSSelectionOptions>;
+}
 
 const optionalText = z.string().optional().catch(undefined);
 const optionalNumber = z.number().optional().catch(undefined);
@@ -46,18 +54,18 @@ const sttHeadersSchema = z.object({
   authorization: optionalText,
 }).catch({});
 
-const bodyOf = <Body>(body: Body) => body || {};
+const bodyOf = <Body>(body: Body): Body | Record<string, never> => body || {};
 
-export function speechVoiceHeaderValue(voice: string) {
+export function speechVoiceHeaderValue(voice: string): string {
   return encodeURIComponent(voice);
 }
 
-export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTtsSelection }) {
-  if (!ttsService || typeof ttsService.isAvailable !== 'function') throw new TypeError('TTS routes require the configured TTS service');
-  if (typeof resolveTtsSelection !== 'function') throw new TypeError('TTS routes require selected credential context');
-  const selectionFor = async (req) => {
+export function registerTtsRoutes(app: Application, { sayTTSCapability, ttsService, resolveTtsSelection }: TtsRoutesDependencies): void {
+  if (!ttsService || !z.function().safeParse(ttsService.isAvailable).success) throw new TypeError('TTS routes require the configured TTS service');
+  if (!z.function().safeParse(resolveTtsSelection).success) throw new TypeError('TTS routes require selected credential context');
+  const selectionFor = async (req: Request): Promise<TTSSelectionOptions> => {
     const selection = await resolveTtsSelection(req);
-    if (!selection || typeof selection !== 'object') throw new Error('Selected TTS credential is unavailable');
+    if (!selection || !isRecord(selection)) throw new Error('Selected TTS credential is unavailable');
     return selection;
   };
 
@@ -68,7 +76,7 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
   app.put('/api/voice/keys', express.json({ limit: '16kb' }), (req, res) => {
     try {
       res.json(updateVoiceKeys(voiceKeysPatchSchema.parse(req.body)));
-    } catch (error) {
+    } catch {
       res.status(400).json({ error: 'Invalid transcription key request' });
     }
   });
@@ -89,8 +97,8 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
       return res.status(415).json({ error: 'Send the speech request as JSON' });
     }
     try {
-      const { text, voice = 'nova', model = 'gpt-4o-mini-tts', speed = 0.9, instructions, baseURL } = req.body || {};
-      if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'Text is required' });
+      const { text, voice = 'nova', model = 'gpt-4o-mini-tts', speed = 0.9, instructions, baseURL } = speakBodySchema.parse(bodyOf(req.body));
+      if (!text || !text.trim()) return res.status(400).json({ error: 'Text is required' });
       const requested = normalizeCustomOpenAIBaseURL(baseURL);
       if (requested.error) return res.status(400).json({ error: requested.error });
       const selection = await selectionFor(req);
@@ -126,15 +134,14 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
 
       return res.json(result);
     } catch {
-      const sanitized = typeof req.body?.mode === 'string' && req.body.mode === 'note'
-        ? sanitizeForNote(req.body?.text || '')
-        : sanitizeForTTS(req.body?.text || '');
+      const fallback = summarizeBodySchema.parse(bodyOf(req.body));
+      const sanitized = fallback.mode === 'note'
+        ? sanitizeForNote(fallback.text ?? '')
+        : sanitizeForTTS(fallback.text ?? '');
       return res.json({ summary: sanitized, summarized: false, reason: 'Summarization unavailable' });
     }
   });
 
-       
-  // TTS status endpoint
   app.get('/api/tts/status', async (req, res) => {
     try {
       const selection = await selectionFor(req);
@@ -177,7 +184,7 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
           if (match) voice = match;
         }
       }
-      
+
       const { execFile } = await import('node:child_process');
       const { promisify } = await import('node:util');
       const fs = await import('node:fs');
@@ -193,7 +200,7 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
 
       const audioBuffer = await fs.promises.readFile(tempFile);
 
-      fs.promises.unlink(tempFile).catch(() => {});
+      fs.promises.unlink(tempFile).catch(() => { });
 
       res.setHeader('Content-Type', 'audio/mp4');
       res.setHeader('X-Speech-Voice', speechVoiceHeaderValue(voice));
@@ -203,7 +210,7 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
     } catch (error) {
       console.error('[TTS-Say] Error:', error);
       res.status(500).json({
-        error: error instanceof Error ? error.message : 'Say command failed'
+        error: error instanceof Error ? error.message : 'Say command failed',
       });
     }
   });
@@ -215,15 +222,12 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
       try {
         const { transcribeAudio } = await import('./stt.js');
 
-        const mimeType = (req.headers['content-type'] || 'audio/webm').split(',')[0].trim();
-        const baseURL = typeof req.headers['x-base-url'] === 'string' ? req.headers['x-base-url'].trim() : '';
-        const model = typeof req.headers['x-model'] === 'string' && req.headers['x-model'].trim().length > 0
-          ? req.headers['x-model'].trim()
-          : 'deepdml/faster-whisper-large-v3-turbo-ct2';
-        const language = typeof req.headers['x-language'] === 'string' && req.headers['x-language'].trim().length > 0
-          ? req.headers['x-language'].trim()
-          : undefined;
-        const authHeader = typeof req.headers['authorization'] === 'string' ? req.headers['authorization'].trim() : '';
+        const headers = sttHeadersSchema.parse(req.headers);
+        const mimeType = (headers['content-type'] || 'audio/webm').split(',')[0]?.trim() || 'audio/webm';
+        const baseURL = (headers['x-base-url'] ?? '').trim();
+        const model = headers['x-model']?.trim() || 'deepdml/faster-whisper-large-v3-turbo-ct2';
+        const language = headers['x-language']?.trim() || undefined;
+        const authHeader = (headers.authorization ?? '').trim();
         const apiKey = (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined) || readVoiceKey('stt');
 
         if (!req.body || !Buffer.isBuffer(req.body) || req.body.length === 0) {
@@ -262,6 +266,6 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
           });
         }
       }
-    }
+    },
   );
 }

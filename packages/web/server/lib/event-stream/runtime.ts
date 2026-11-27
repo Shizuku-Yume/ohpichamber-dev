@@ -1,23 +1,45 @@
+import type { IncomingMessage, Server } from 'node:http';
+import type { Duplex } from 'node:stream';
 import { WebSocketServer } from 'ws';
 import { isOpaqueOriginRequest, isPasswordlessSocketOriginAllowed } from '../security/request-security.js';
-
+import type { RequestOriginChecker } from '../security/request-security.js';
+import { isString } from '../shared/object-guards.js';
 import { parseRequestPathname } from '../terminal/terminal-ws-protocol.js';
+import type { createUiAuth } from '../ui-auth/ui-auth.js';
+import type { EventRouting, StreamSocket } from './contracts.js';
+import type { GlobalMessageStreamHub } from './global-hub.js';
+import { createGlobalMessageStreamWsBridge } from './global-ws-bridge.js';
 import {
   MESSAGE_STREAM_DIRECTORY_WS_PATH,
   MESSAGE_STREAM_GLOBAL_WS_PATH,
   MESSAGE_STREAM_WS_HEARTBEAT_INTERVAL_MS,
-  serializeMessageStreamWsEvent,
   sendSerializedMessageStreamWsFrame,
+  serializeMessageStreamWsEvent,
 } from './protocol.js';
-import { createGlobalMessageStreamWsBridge } from './global-ws-bridge.js';
 import { acceptSessionMessageStreamWsConnection } from './session-ws-bridge.js';
 
-export function createGlobalUiEventBroadcaster({
+export interface GlobalUiEventBroadcasterOptions<SseClient, EventPayload> {
+  sseClients: Set<SseClient>;
+  wsClients: Set<StreamSocket>;
+  writeSseEvent: (res: SseClient, payload: EventPayload, serializedPayload?: string) => void;
+}
+
+export interface MessageStreamWsRuntimeOptions {
+  server: Pick<Server, 'on' | 'off'>;
+  uiAuthController?: Pick<ReturnType<typeof createUiAuth>, 'enabled' | 'ensureSessionToken'> | null | undefined;
+  isRequestOriginAllowed: RequestOriginChecker;
+  rejectWebSocketUpgrade: (socket: Duplex, code: number, reason: string) => void;
+  wsClients: Set<StreamSocket>;
+  heartbeatIntervalMs?: number;
+  globalEventHub: GlobalMessageStreamHub;
+}
+
+export function createGlobalUiEventBroadcaster<SseClient, EventPayload>({
   sseClients,
   wsClients,
   writeSseEvent,
-}) {
-  return (payload, options = {}) => {
+}: GlobalUiEventBroadcasterOptions<SseClient, EventPayload>) {
+  return (payload: EventPayload, options: EventRouting = {}) => {
     const hasSseClients = sseClients.size > 0;
     const hasWsClients = wsClients.size > 0;
     if (!hasSseClients && !hasWsClients) {
@@ -30,14 +52,15 @@ export function createGlobalUiEventBroadcaster({
         try {
           writeSseEvent(res, payload, serializedPayload);
         } catch {
+          void 0;
         }
       }
     }
 
     if (hasWsClients) {
       const serializedFrame = serializeMessageStreamWsEvent(payload, {
-        directory: typeof options.directory === 'string' && options.directory.length > 0 ? options.directory : 'global',
-        eventId: typeof options.eventId === 'string' && options.eventId.length > 0 ? options.eventId : undefined,
+        directory: isString(options.directory) && options.directory.length > 0 ? options.directory : 'global',
+        eventId: isString(options.eventId) && options.eventId.length > 0 ? options.eventId : undefined,
       });
       for (const socket of Array.from(wsClients)) {
         const sent = sendSerializedMessageStreamWsFrame(socket, serializedFrame);
@@ -57,7 +80,7 @@ export function createMessageStreamWsRuntime({
   wsClients,
   heartbeatIntervalMs = MESSAGE_STREAM_WS_HEARTBEAT_INTERVAL_MS,
   globalEventHub,
-}) {
+}: MessageStreamWsRuntimeOptions) {
   if (!globalEventHub) throw new TypeError('Canonical global event hub is required');
   const wsServer = new WebSocketServer({
     noServer: true,
@@ -72,7 +95,7 @@ export function createMessageStreamWsRuntime({
   });
 
   wsServer.on('connection', (socket, req) => {
-    const rawUrl = typeof req?.url === 'string' ? req.url : MESSAGE_STREAM_GLOBAL_WS_PATH;
+    const rawUrl = isString(req?.url) ? req.url : MESSAGE_STREAM_GLOBAL_WS_PATH;
     const pathname = parseRequestPathname(rawUrl);
     const requestUrl = new URL(rawUrl, 'http://127.0.0.1');
     const isGlobalStream = pathname === MESSAGE_STREAM_GLOBAL_WS_PATH;
@@ -89,7 +112,7 @@ export function createMessageStreamWsRuntime({
     acceptSessionMessageStreamWsConnection({ socket, sessionId, requestedLastEventId, globalHub, wsClients, heartbeatIntervalMs });
   });
 
-  const upgradeHandler = (req, socket, head) => {
+  const upgradeHandler = (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const pathname = parseRequestPathname(req.url);
     if (pathname !== MESSAGE_STREAM_GLOBAL_WS_PATH && pathname !== MESSAGE_STREAM_DIRECTORY_WS_PATH) {
       return;
@@ -139,17 +162,19 @@ export function createMessageStreamWsRuntime({
       globalBridge.close();
 
       try {
-        for (const client of wsServer.clients) {
+        for (const client of wsServer.clients ?? []) {
           try {
             client.terminate();
           } catch {
+            void 0;
           }
         }
 
-        await new Promise((resolve) => {
+        await new Promise<void>((resolve) => {
           wsServer.close(() => resolve());
         });
       } catch {
+        void 0;
       } finally {
         wsClients.clear();
       }

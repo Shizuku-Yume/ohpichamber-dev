@@ -1,35 +1,47 @@
-/**
- * Session assist lifecycle runtime.
- *
- * Next-prompt suggestions have moved to the OMP worker driver at completed
- * `agent_end`, and recaps are owned by OMP's `enableIdleMaintenance`. The Host
- * suggestion runtime, timers, metadata persistence and Jev gates are deleted.
- * This runtime observes canonical events to notify when a turn settles.
- */
+import type { CanonicalEvent, HistoryPage, RuntimeSession, SessionSnapshot } from '@openchamber/agent-contract';
+import type { SessionLineage } from '../session-lineage.js';
+
+export interface AssistSessionScope {
+  sessionId: string;
+  rootSessionId?: string;
+  projectId?: string;
+  workspaceId?: string;
+  cwd?: string;
+}
+
+export interface SessionAssistSessionService {
+  open: (sessionId: string) => Promise<SessionSnapshot | { session: RuntimeSession }>;
+  history: (sessionId: string, query?: string) => Promise<HistoryPage>;
+}
+
+export interface SessionAssistDependencies {
+  sessionService: SessionAssistSessionService;
+  resolveSessionScope: (sessionId: string) => Promise<AssistSessionScope | null>;
+  lineage?: Pick<SessionLineage, 'isChild'> | null;
+  onTurnSettled?: ((sessionId: string) => void | Promise<void>) | null;
+}
+
+export interface SessionAssistRuntime {
+  processCanonicalEvent: (event: CanonicalEvent, scope?: AssistSessionScope | null) => void;
+  stop: () => void;
+}
 
 export const createSessionAssistRuntime = ({
-  sessionService,
-  resolveSessionScope,
   lineage = null,
   onTurnSettled = null,
-} = {}) => {
-  if (!sessionService || typeof sessionService.open !== 'function' || typeof sessionService.history !== 'function') {
-    throw new Error('session-assist requires the canonical session service');
-  }
-  if (typeof resolveSessionScope !== 'function') throw new Error('session-assist requires a session scope resolver');
-
-  const settled = new Set();
+}: SessionAssistDependencies): SessionAssistRuntime => {
+  const settled = new Set<string>();
   let stopped = false;
 
-  const processCanonicalEvent = (event, scope) => {
-    if (stopped || !event) return;
+  const processCanonicalEvent = (event: CanonicalEvent, scope?: AssistSessionScope | null): void => {
+    if (stopped) return;
     if (event.type === 'session.deleted') {
-      for (const id of event.deletedSessionIds ?? []) {
+      for (const id of event.deletedSessionIds) {
         settled.delete(id);
       }
       return;
     }
-    const sessionId = typeof event?.sessionId === 'string' ? event.sessionId : '';
+    const sessionId = event.sessionId;
     if (!sessionId || (scope?.sessionId && scope.sessionId !== sessionId)) return;
     if (lineage?.isChild?.(sessionId) === true) return;
 
@@ -47,7 +59,7 @@ export const createSessionAssistRuntime = ({
     if (isTurnCompleted) {
       if (!settled.has(sessionId)) {
         settled.add(sessionId);
-        onTurnSettled?.(sessionId);
+        void onTurnSettled?.(sessionId);
       }
       return;
     }
@@ -55,12 +67,12 @@ export const createSessionAssistRuntime = ({
     if (event.type === 'run.failed' || event.type === 'run.cancelled' || (event.type === 'session.status' && event.runtimeStatus === 'unavailable')) {
       if (!settled.has(sessionId)) {
         settled.add(sessionId);
-        onTurnSettled?.(sessionId);
+        void onTurnSettled?.(sessionId);
       }
     }
   };
 
-  const stop = () => {
+  const stop = (): void => {
     stopped = true;
     settled.clear();
   };

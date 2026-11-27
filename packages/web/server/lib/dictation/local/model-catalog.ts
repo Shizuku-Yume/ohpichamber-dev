@@ -276,11 +276,6 @@ export const LOCAL_TTS_MODEL_CATALOG: LocalModelCatalog = {
 export const DEFAULT_LOCAL_STT_MODEL = 'parakeet-tdt-0.6b-v3-int8';
 
 export const PREVIOUS_DEFAULT_LOCAL_STT_MODEL = 'parakeet-tdt-0.6b-v2-int8';
-
-/**
- * Extracted directories of models the catalog no longer offers. Settings can
- * no longer show or delete them, so the service removes them from disk.
- */
 export const RETIRED_LOCAL_MODEL_DIRS = ['sherpa-onnx-whisper-base'];
 
 export const DEFAULT_LOCAL_TTS_MODEL = 'kokoro-en-v0_19';

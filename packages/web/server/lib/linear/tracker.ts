@@ -1,14 +1,13 @@
 import { disconnectCurrentLinearWorkspace, readLinearAuthStatus } from './auth-status.js';
 import { LINEAR_SIGN_IN_SETTING, LINEAR_SIGN_IN_SETTINGS_KEY } from './auth.js';
-import { isPlainObject, readTrimmedString } from './parse.js';
-import type { TrackerDescriptor, TrackerStateCategory, TrackerPriority, TrackerItemSummary, TrackerItem, TrackerWorkflowState, TrackerAuthStatus, TrackerImplementation } from '../trackers/tracker-contract.js';
+import { isPlainObject, isString, readTrimmedString } from './parse.js';
+import type { TrackerDescriptor, TrackerStateCategory, TrackerPriority, TrackerItemSummary, TrackerItem, TrackerWorkflowState, TrackerAuthStatus, TrackerSignInUnavailable, TrackerImplementation } from '../trackers/tracker-contract.js';
 import type { linearLibraries } from './index.js';
 import type { createLinearSessionStatusRuntime } from './status-runtime.js';
 import type { HOST_LINEAR_API_ORIGIN } from 'ohpichamber-sdk';
 import type { LinearIssue, LinearIssueSummary, LinearWorkflowState } from './issue-contracts.js';
 import type { LinearTeam } from './teams.js';
-import type { LinearAuth, getLinearAuthWorkspaces } from './auth.js';
-
+import type { getLinearAuthWorkspaces } from './auth.js';
 const LINEAR_TRACKER_ID = 'linear';
 
 export const LINEAR_TRACKER_DESCRIPTOR: TrackerDescriptor = Object.freeze({
@@ -182,15 +181,12 @@ export function toTrackerAuthStatus(status: Awaited<ReturnType<typeof readLinear
   return { connected: true, account: accounts.find((account) => account.current) ?? null, accounts };
 }
 
-/**
- * Why Linear's browser sign-in cannot start here, or undefined when it can.
- * It needs a broker URL (or an explicit redirect URI) the operator configured.
- * Absent when the injected libraries do not say (a fake in a test), so the
- * client asks the start route instead of guessing.
- * @returns {import('../trackers/tracker-contract').TrackerSignInUnavailable | undefined}
- */
-function linearSignInUnavailable(libraries) {
-  if (typeof libraries?.isLinearSignInConfigured !== 'function') return undefined;
+function isSignInCheck(value: unknown): value is () => boolean {
+  return typeof value === 'function';
+}
+
+function linearSignInUnavailable(libraries: Partial<Pick<TrackerLibraries, 'isLinearSignInConfigured'>> | null | undefined): TrackerSignInUnavailable | undefined {
+  if (!isSignInCheck(libraries?.isLinearSignInConfigured)) return undefined;
   if (libraries.isLinearSignInConfigured()) return undefined;
   return {
     reason: 'broker-url-missing',
@@ -199,7 +195,7 @@ function linearSignInUnavailable(libraries) {
   };
 }
 
-const linearAccountLabel = (auth) => (
+const linearAccountLabel = (auth: ReturnType<TrackerLibraries['getLinearAuth']>) => (
   readTrimmedString(auth?.user?.displayName)
   || readTrimmedString(auth?.user?.name)
   || readTrimmedString(auth?.organization?.name)
@@ -210,14 +206,9 @@ type TrackerLibraries = typeof linearLibraries & {
   HOST_LINEAR_API_ORIGIN: typeof HOST_LINEAR_API_ORIGIN;
 };
 
-function isMissingClientError(cause: unknown): cause is { message?: unknown } {
-  return canReadErrorCode(cause) && cause.code === 'LINEAR_CLIENT_ID_MISSING';
-}
-
-function canReadErrorCode(cause: unknown): cause is { code?: unknown } {
+function canReadErrorDetails(cause: unknown): cause is { code?: unknown; message?: unknown } {
   return cause != null;
 }
-
 export function createLinearTracker(libraries: TrackerLibraries): TrackerImplementation {
   const {
     activateLinearAuth,
@@ -248,10 +239,10 @@ export function createLinearTracker(libraries: TrackerLibraries): TrackerImpleme
       const { authorizationUrl, expiresIn } = await startAuthorization({ origin: origin === 'desktop' ? 'desktop' : 'web' });
       return { authorizationUrl, expiresIn };
     } catch (error) {
-      if (error?.code === 'LINEAR_CLIENT_ID_MISSING') throw userError(error.message);
-      // No broker and no explicit redirect: the card shows the reason from the
-      // status, and a direct start call answers as a user error naming the setting.
-      if (error?.code === 'LINEAR_BROKER_NOT_CONFIGURED') throw userError(error.message);
+      const details = canReadErrorDetails(error) ? error : undefined;
+      const message = isString(details?.message) ? details.message : undefined;
+      if (details?.code === 'LINEAR_CLIENT_ID_MISSING') throw userError(message);
+      if (details?.code === 'LINEAR_BROKER_NOT_CONFIGURED') throw userError(message);
       throw error;
     }
   };

@@ -553,6 +553,36 @@ describe('core-routes', () => {
     expect(response.body.server.candidates).toEqual([{ type: 'lan', url: 'http://runtime.example', priority: 10 }]);
   });
 
+  it('keeps a valid serverUrl and label when includeRelay is mistyped', async () => {
+    const { app, dependencies } = createPairingRouteApp();
+
+    const response = await request(app)
+      .post('/api/client-auth/pairing/sessions')
+      .set('Host', 'runtime.example')
+      .send({ label: 'Pair phone', serverUrl: 'http://192.168.1.20:2606', allowedClientKinds: ['mobile'], includeRelay: 'yes' })
+      .expect(201);
+
+    // A non-boolean includeRelay degrades only itself; it must not wipe the
+    // valid serverUrl, label or allowedClientKinds the same body carries.
+    expect(response.body.server.candidates[0]).toEqual({ type: 'lan', url: 'http://192.168.1.20:2606', priority: 10 });
+    expect(dependencies.clientPairingRuntime.createPairingSession).toHaveBeenCalledWith(
+      expect.objectContaining({ label: 'Pair phone', allowedClientKinds: ['mobile'] }),
+    );
+  });
+
+  it('keeps the pairing secret when a sibling redemption field is mistyped', async () => {
+    const { app, dependencies } = createPairingRouteApp();
+
+    await request(app)
+      .post('/api/client-auth/pairing/redeem')
+      .send({ pairingId: 'pair_1', secret: 'secret', clientKind: 'mobile', deviceName: 42 })
+      .expect(200);
+
+    expect(dependencies.clientPairingRuntime.redeemPairingSession).toHaveBeenCalledWith(
+      expect.objectContaining({ pairingId: 'pair_1', secret: 'secret', deviceName: 42 }),
+    );
+  });
+
   it('requires owner auth before creating or cancelling pairing sessions', async () => {
     const { app, dependencies } = createPairingRouteApp({
       uiAuthController: {

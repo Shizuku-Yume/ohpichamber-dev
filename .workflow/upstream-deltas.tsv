@@ -5205,25 +5205,20 @@ packages/web/public/pwa-maskable-512.png	fork-differs	decision	2026-11-16 - The 
 packages/web/public/site.webmanifest	fork-differs	decision	2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names	User- and OS-facing product name, CLI, bundle ID, data dir, or deep-link scheme renamed to OhPiChamber/ohpichamber.
 packages/web/scripts/build-server.mjs	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Retains mixed Host TypeScript/JavaScript runtime copying and runtime-closure verification so the built Host includes the Canonical gateway and supervised Agent Service modules.
 packages/web/scripts/build-server.test.mjs	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Checks emitted Agent Service supervisor declarations, Host JavaScript runtime siblings and the gateway import closure, not only upstream TypeScript output.
-packages/web/scripts/check-server-types.mjs	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Preserves the explicit fork-owned Host JavaScript inventory and split legacy/strict check projects needed by the retained Canonical gateway rather than treating the OMP cutover as an upstream TypeScript conversion.
-packages/web/scripts/check-server-types.test.mjs	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Pins the exact legacy Host JavaScript exemptions while rejecting unlisted neighboring modules; covers the fork check-server-types inventory.
+packages/web/scripts/check-server-types.test.mjs	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Covers the strict server/bin TypeScript check, paired-declaration rejection, and non-entry JavaScript refusal.
 packages/web/scripts/dev-server-watch.test.mjs	fork-differs	decision	2026-11-11 - Keep the Electron shell on the in-process Host and the staged Agent Runtime	Asserts both source Host development commands first build agent-contract and agent-service exports, which Electron HMR and Web startup require.
 packages/web/scripts/fixture-node-modules.mjs	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
-packages/web/scripts/fork-owned-server-javascript.mjs	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
-packages/web/scripts/fork-owned-server-untyped.json	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/scripts/node-source-entries.test.mjs	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Exercises the retained settings runtime and JavaScript space stub instead of retired OpenCode provider/run-command modules and removed release-mirror/tool-use-bench entrypoints.
 packages/web/scripts/pack-standalone.mjs	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/scripts/postpack.mjs	fork-only	fork-added		Restores `package.json` from the worktree-hashed backup, preserves `agent-runtime` symlinks in the packed tarball, and verifies the manifest and payload.
 packages/web/scripts/prepack.mjs	fork-only	fork-added		Stages extensions, `standalone-sdk`, `changelog`, and `agent-runtime`, backs up `package.json` to a worktree-hashed temp file, and strips `workspace:*` deps for packing.
 packages/web/scripts/prepare-agent-runtime.mjs	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/scripts/register-server-sources.test.mjs	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
-packages/web/scripts/server-check-scope.mjs	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
-packages/web/scripts/server-check-scope.test.mjs	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
-packages/web/scripts/server-program-boundary.test.mjs	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Copies the fork check-scope, owned-JavaScript inventory and runtime-closure dependencies into boundary fixtures so they execute the actual Host build/check entrypoints.
+packages/web/scripts/server-program-boundary.test.mjs	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Copies the check-server-types and runtime-closure dependencies into boundary fixtures so they execute the actual Host build/check entrypoints.
 packages/web/scripts/server-runtime-closure.mjs	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/scripts/server-runtime-closure.test.mjs	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/scripts/server-types-bundle.test.mjs	fork-differs	decision	2026-11-11 - Keep the Electron shell on the in-process Host and the staged Agent Runtime	Tests Node-target bundling with the installed Bun executable rather than the retired VS Code extension's esbuild dependency.
-packages/web/scripts/server-types-lint.test.mjs	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Tests the carried Host runtime TypeScript lint scope in addition to strict new-module rules, matching the fork server check projects.
+packages/web/scripts/server-types-lint.test.mjs	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Verifies strict server TypeScript lint rules (including anti-slop guards) across server modules with no legacy runtime exemption.
 packages/web/scripts/smoke-server-build.mjs	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
 packages/web/scripts/stage-changelog.mjs	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/scripts/standalone-loader.mjs	fork-only	fork-added		Propagates `{ runtimeRoot, sdkRoot }` via `Module.register` `initialize()` data, skips `.asar` runtime paths, and resolves `@openchamber/agent-contract`, `@openchamber/agent-service`, and `ohpichamber-sdk`.
@@ -5268,7 +5263,7 @@ packages/web/server/lib/browser-control/broker.ts	fork-differs	decision	2026-11-
 packages/web/server/lib/browser-control/provider.test.js	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Guest SDK renamed to ohpichamber-sdk and workspace/extension references updated for 1.0.0.
 packages/web/server/lib/browser-control/provider.ts	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Guest SDK renamed to ohpichamber-sdk and workspace/extension references updated for 1.0.0.
 packages/web/server/lib/browser-control/uploads.test.js	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Exercise the restored registered upload route and captured-directory rejection, including traversal and symlink escapes, against the shared Host upload store.
-packages/web/server/lib/canonical-session-state.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
+packages/web/server/lib/canonical-session-state.ts	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/changelog/update-notes.test.js	fork-differs	decision	2026-11-16 - Cut the fork off from upstream-hosted services	Upstream-hosted service dependency, broker, relay default, or changelog API cut off for standalone fork builds.
 packages/web/server/lib/changelog/update-notes.ts	fork-differs	decision	2026-11-16 - Cut the fork off from upstream-hosted services	Upstream-hosted service dependency, broker, relay default, or changelog API cut off for standalone fork builds.
 packages/web/server/lib/chat-directories/DOCUMENTATION.md	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Document Canonical inventory, Host-scoped directory evidence and quarantined inode-checked reclamation rather than SDK paging.
@@ -5310,7 +5305,7 @@ packages/web/server/lib/environment/runtime.ts	fork-differs	decision	2026-11-18 
 packages/web/server/lib/environment/store.test.js	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
 packages/web/server/lib/environment/store.ts	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
 packages/web/server/lib/event-stream/DOCUMENTATION.md	fork-differs	decision	2026-11-11 - Keep the lane 12 host-adjacent modules on the fork's Host owners in the v2.7.0 merge	Fork host-adjacent module keeps the Canonical/Host owner; upstream's OpenCode engine, wire-event and UI path is excluded by the OMP boundary.
-packages/web/server/lib/event-stream/canonical-test-fixtures.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
+packages/web/server/lib/event-stream/canonical-test-fixtures.ts	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/event-stream/contracts.ts	fork-differs	decision	2026-11-20 - Retain runtime-equivalent source compatibility cleanup	Type-only contracts, formatting or unused imports emit the same JavaScript after the recorded package rename.
 packages/web/server/lib/event-stream/directory-ws-bridge.ts	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/web/server/lib/event-stream/global-hub.test.js	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
@@ -5320,7 +5315,7 @@ packages/web/server/lib/event-stream/index.ts	fork-differs	decision	2026-11-11 -
 packages/web/server/lib/event-stream/rebind.test.js	fork-differs	decision	2026-11-11 - Keep the lane 12 host-adjacent modules on the fork's Host owners in the v2.7.0 merge	Rebind coverage for the Host session stream; upstream's rewritten fixture drove the removed per-space OpenCode stream.
 packages/web/server/lib/event-stream/runtime.test.js	fork-differs	decision	2026-11-11 - Keep the lane 12 host-adjacent modules on the fork's Host owners in the v2.7.0 merge	The fork test exercises the Host hub through the Canonical fixtures; upstream tested the removed OpenCode SSE reader and delta coalescing.
 packages/web/server/lib/event-stream/runtime.ts	fork-differs	decision	2026-11-11 - Keep the lane 12 host-adjacent modules on the fork's Host owners in the v2.7.0 merge	The fork runtime mounts the Host session WS bridge; upstream's upstream-reader/stall-timeout wiring reads an OpenCode SSE stream that no longer exists.
-packages/web/server/lib/event-stream/session-ws-bridge.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
+packages/web/server/lib/event-stream/session-ws-bridge.ts	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/event-stream/translate-v2.test.js	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Public stream fixtures consume Canonical events and snapshots rather than OpenCode message/part SSE records; synthetic SDK subagent events remain private.
 packages/web/server/lib/event-stream/translate-v2.ts	fork-differs	decision	2026-11-11 - Keep the lane 12 host-adjacent modules on the fork's Host owners in the v2.7.0 merge	Retained only for the hub's historical translated() view of injected space payloads and its tests; the fork added session.forked translation for that compatibility path.
 packages/web/server/lib/event-stream/turn-boundary-order.ts	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
@@ -5349,6 +5344,7 @@ packages/web/server/lib/git/routes.change-id.test.js	fork-differs	decision	2026-
 packages/web/server/lib/git/routes.commit-extras.test.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/git/routes.test.js	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Route test harness for the fork Host git routes, including initializeRepository and the worktree task title.
 packages/web/server/lib/git/routes.ts	fork-differs	decision	2026-11-11 - Keep the lane 12 host-adjacent modules on the fork's Host owners in the v2.7.0 merge	Host git routes keep initializeRepository/POST /api/git/init and the Host worktree lease; the @opencode/client worktree disposer was removed.
+packages/web/server/lib/git/service-contracts.ts	fork-differs	decision	2026-11-26 - Clear every solvable technical debt before the 1.0 release	Git service contract types widened for the fork Host worktree-directory ownership (optional legacy root, default worktree root) in the strict TypeScript conversion of the fork-owned server modules.
 packages/web/server/lib/git/service.test.js	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Tests the fork Host git service surface (Host session state, walkthrough hunks, project config); upstream asserted the OpenCode start-command source.
 packages/web/server/lib/git/service.ts	fork-differs	decision	2026-11-21 - Preserve relative symlinks in archive restore comparison checkouts	Preserves symlink text during restore preflight in addition to the retained Host project, change-id and worktree-directory ownership; upstream read the OpenCode project start command and worktree directory.
 packages/web/server/lib/git/ssh-auth-sock.ts	fork-differs	decision	2026-11-26 - Keep upstream-shared hot paths lean in the performance pass	Memoizes the socket resolution so Git commands stop spawning gpgconf on every call.
@@ -5358,7 +5354,7 @@ packages/web/server/lib/git/storage-process.fixture.ts	fork-differs	decision	202
 packages/web/server/lib/git/worktree-archive-host.test.js	fork-only	fork-added		Covers pre-pin restore failure, persisted recovery, discovery across reopen and pinned or moved recovery fences; canonical fixtures restore active chats while preserving independently archived chats.
 packages/web/server/lib/git/worktree-archive-native.test.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/git/worktree-creation.ts	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Only the recorded fork product/package naming differs from the pinned upstream source.
-packages/web/server/lib/git/worktree-directory.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
+packages/web/server/lib/git/worktree-directory.ts	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/git/worktree-directory.test.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/gitea/client.ts	fork-differs	decision	2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names	User-facing product name updated to OhPiChamber in copy, UI, CLI, or docs.
 packages/web/server/lib/gitea/provider.ts	fork-differs	decision	2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names	User-facing product name updated to OhPiChamber in copy, UI, CLI, or docs.
@@ -5370,7 +5366,7 @@ packages/web/server/lib/github/mutations.ts	fork-differs	decision	2026-11-16 - F
 packages/web/server/lib/github/provider.ts	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Only the recorded fork product/package naming differs from the pinned upstream source.
 packages/web/server/lib/github/reference-search.ts	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Only the recorded fork product/package naming differs from the pinned upstream source.
 packages/web/server/lib/github/resources.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	GitHub sits on the Host source-control shell; docs and route tests document the shell-owned routes rather than OpenCode module entrypoints.
-packages/web/server/lib/gitlab/auth-storage.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
+packages/web/server/lib/gitlab/auth-storage.ts	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/gitlab/auth-storage.test.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/gitlab/client.ts	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Only the recorded fork product/package naming differs from the pinned upstream source.
 packages/web/server/lib/gitlab/context-extras.ts	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
@@ -5406,8 +5402,7 @@ packages/web/server/lib/guests/marks.ts	fork-differs	decision	2026-11-16 - First
 packages/web/server/lib/guests/mentions.ts	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Guest SDK renamed to ohpichamber-sdk and workspace/extension references updated for 1.0.0.
 packages/web/server/lib/guests/oauth.ts	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Guest SDK renamed to ohpichamber-sdk and workspace/extension references updated for 1.0.0.
 packages/web/server/lib/guests/opencode-plugin-routes.test.js	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
-packages/web/server/lib/guests/opencode-plugin.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
-packages/web/server/lib/guests/opencode-plugin.ts	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
+packages/web/server/lib/guests/opencode-plugin.ts	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Fork-owned guest plugin delivery and folder resolution retained in TypeScript on the Host boundary; upstream OpenCode plugin installation routes remain retired.
 packages/web/server/lib/guests/opencode-provider/DOCUMENTATION.md	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/web/server/lib/guests/opencode-provider/index.ts	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/web/server/lib/guests/opencode-provider/provider.test.js	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
@@ -5437,34 +5432,33 @@ packages/web/server/lib/guests/surface.test.js	fork-differs	decision	2026-11-16 
 packages/web/server/lib/guests/surface.ts	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Guest SDK renamed to ohpichamber-sdk and workspace/extension references updated for 1.0.0.
 packages/web/server/lib/guests/updates.ts	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Guest SDK renamed to ohpichamber-sdk and workspace/extension references updated for 1.0.0.
 packages/web/server/lib/host/DOCUMENTATION.md	fork-only	omp-boundary		Documents the Host-owned pre-pin restore rollback and narrow persisted recovery invariant.
-packages/web/server/lib/host/agent-runtime.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/agent-runtime.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/agent-runtime.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/agent-scope-runtime.js	fork-only	omp-boundary		Normalizes separators, drive-letter case, and trailing separators only for the lookup of an already authorized deleted Windows checkout.
+packages/web/server/lib/host/agent-scope-runtime.ts	fork-only	omp-boundary		Normalizes separators, drive-letter case, and trailing separators only for the lookup of an already authorized deleted Windows checkout.
 packages/web/server/lib/host/agent-scope-runtime.test.js	fork-only	omp-boundary		Resolves a deleted Windows checkout via the renderer's forward-slash path and a drive-letter and trailing-separator variant.
-packages/web/server/lib/host/agent-scope-store.js	fork-only	omp-boundary		Atomically rolls unpinned restore claim release back to archived and repairs only equivalent unclaimed rows on store open; pinned and moved restores retain recovery fences.
+packages/web/server/lib/host/agent-scope-store.ts	fork-only	omp-boundary		Atomically rolls unpinned restore claim release back to archived and repairs only equivalent unclaimed rows on store open; pinned and moved restores retain recovery fences.
 packages/web/server/lib/host/agent-scope-store.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/agent-service-supervisor.approval-policy.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/agent-service-supervisor.d.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/agent-service-supervisor.diagnostics.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/agent-service-supervisor.environment.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/agent-service-supervisor.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/agent-service-supervisor.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/agent-service-supervisor.registry.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/agent-service-supervisor.restart.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/agent-service-supervisor.skill-source.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/approval-policy-store.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/approval-policy-store.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/approval-policy-store.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/attachment-routes.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/attachment-routes.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/attachment-routes.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/attachment-store.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/attachment-store.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/attachment-store.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/backup-restore.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/behavior-prompt.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/behavior-prompt.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/behavior-prompt.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/behavior-routes.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/behavior-routes.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/behavior-routes.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/canonical-images-routes.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/canonical-plugins.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/canonical-routes.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/canonical-routes.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/canonical-settings-routes.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/canonical-shell-routes.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/canonical-subagent-admission.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
@@ -5472,70 +5466,68 @@ packages/web/server/lib/host/canonical-usage-routes.test.js	fork-only	omp-bounda
 packages/web/server/lib/host/canonical-warming-routes.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/cli-options.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/desktop-client-bootstrap.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/direct-command-admission-store.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/direct-command-admission-store.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/direct-command-admission-store.test.mjs	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/executable.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/executable.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/executable.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/file-resource-agent-routes.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/legacy-attachment-importer.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/file-resource-agent-routes.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/legacy-attachment-importer.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/legacy-attachment-importer.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/legacy-data.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/legacy-data.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/legacy-data.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/login-shell-env.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/managed-process-registry.d.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/managed-process-registry.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/login-shell-env.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/managed-process-registry.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/managed-process-registry.test.mjs	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/mcp-oauth-callback.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/mcp-oauth-callback.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/mcp-oauth-callback.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/metadata-conversion.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/metadata-sqlite.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/metadata-conversion.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/metadata-sqlite.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/metadata-sqlite.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/models-metadata.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/models-metadata.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/models-metadata.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/openchamber-routes.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/openchamber-routes.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/openchamber-routes.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/openrouter-model-info.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/openrouter-model-info.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/openrouter-model-info.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/path-utils.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/path-utils.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/path-utils.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/pidfd-terminator.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/pidfd-terminator.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/pidfd-terminator.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/private-credential.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/private-credential.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/private-credential.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/prompt-delivery-runtime.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/prompt-delivery-runtime.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/prompt-delivery-runtime.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/pwa-manifest-routes.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/pwa-session-shortcuts.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/pwa-session-shortcuts.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/pwa-session-shortcuts.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/restart-session-recovery.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/runtime-status-diagnostics.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/server-utils-runtime.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/server-utils-runtime.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/server-utils-runtime.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/session-runtime.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/session-runtime.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/session-runtime.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/session-state.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/session-state.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/session-state.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/settings-files.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/settings-routes.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/settings-files.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/settings-routes.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/settings-routes.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/shared.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/shared.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/shared.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/skill-catalog-owner.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/skill-catalog-owner.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/skill-catalog-owner.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/skill-catalog-routes.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/skill-file-owner.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/skill-catalog-routes.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/skill-file-owner.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/skill-file-owner.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/skill-file-routes.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/skill-file-routes.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/skill-file-routes.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/skill-repository-identity.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/skill-repository-identity.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/skill-repository-identity.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/sse-stream.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/system-omp-runtime.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/theme-watch.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/worker-authorization-channel.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/sse-stream.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/system-omp-runtime.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/theme-watch.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/worker-authorization-channel.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/worker-authorization-channel.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/worker-operation-authorizer.d.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
-packages/web/server/lib/host/worker-operation-authorizer.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/web/server/lib/host/worker-operation-authorizer.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/host/worker-operation-authorizer.test.js	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 packages/web/server/lib/injected-env.test.js	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Only the recorded fork product/package naming differs from the pinned upstream source.
 packages/web/server/lib/limit-failover/DOCUMENTATION.md	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
@@ -5561,11 +5553,11 @@ packages/web/server/lib/markdown-image-grants/routes.test.js	fork-differs	decisi
 packages/web/server/lib/markdown-image-grants/routes.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Image grants stay session-scoped opaque assets (`sourceIndex`/`assetPath`) over the canonical snapshot; upstream bare-path grants and OpenCode message fetch are not adopted.
 packages/web/server/lib/message-queue/DOCUMENTATION.md	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	The queue is the canonical SQLite-backed runtime that sends claimed prompt requests to the Agent Service; upstream JSON queue with OpenCode prompt routes is not adopted.
 packages/web/server/lib/message-queue/attachments.ts	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
-packages/web/server/lib/message-queue/canonical-runtime.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
-packages/web/server/lib/message-queue/prompt-admission.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
+packages/web/server/lib/message-queue/canonical-runtime.ts	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
+packages/web/server/lib/message-queue/prompt-admission.ts	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/message-queue/runtime.test.js	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	The queue is the canonical SQLite-backed runtime that sends claimed prompt requests to the Agent Service; upstream JSON queue with OpenCode prompt routes is not adopted.
 packages/web/server/lib/message-queue/runtime.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	The queue is the canonical SQLite-backed runtime that sends claimed prompt requests to the Agent Service; upstream JSON queue with OpenCode prompt routes is not adopted.
-packages/web/server/lib/message-queue/sqlite-store.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
+packages/web/server/lib/message-queue/sqlite-store.ts	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/message-queue/sqlite-store.test.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/message-search/DOCUMENTATION.md	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Documents the fork Canonical cursor rules; upstream described OpenCode message cursors and schema-3 migration.
 packages/web/server/lib/message-search/indexer.test.js	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Tests the Canonical session service indexer; upstream faked an OpenCode message pager.
@@ -5604,6 +5596,7 @@ packages/web/server/lib/openchamber-control/actions.ts	fork-differs	decision	202
 packages/web/server/lib/openchamber-control/chats.test.js	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/web/server/lib/openchamber-control/contracts.ts	fork-differs	decision	2026-11-20 - Retain runtime-equivalent source compatibility cleanup	Type-only contracts, formatting or unused imports emit the same JavaScript after the recorded package rename.
 packages/web/server/lib/openchamber-control/conversion-boundaries.test.js	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
+packages/web/server/lib/openchamber-control/error.ts	fork-differs	decision	2026-11-26 - Clear every solvable technical debt before the 1.0 release	Control error typing gained the fork Host worktree-archive owner key and JSON-value contracts in the strict TypeScript conversion of the fork-owned server modules.
 packages/web/server/lib/openchamber-control/file-open.ts	fork-differs	decision	2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names	User-facing product name updated to OhPiChamber in copy, UI, CLI, or docs.
 packages/web/server/lib/openchamber-control/form-answer.test.js	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/web/server/lib/openchamber-control/generate-image.test.js	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
@@ -5667,7 +5660,7 @@ packages/web/server/lib/openchamber-sessions/turn-duration.test.js	fork-differs	
 packages/web/server/lib/openchamber-sessions/turn-duration.ts	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
 packages/web/server/lib/openchamber-sessions/work-naming.test.js	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
 packages/web/server/lib/openchamber-sessions/work-naming.ts	fork-differs	decision	2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names	User-facing product name updated to OhPiChamber in copy, UI, CLI, or docs.
-packages/web/server/lib/openchamber-sessions/worktree-move-bridge.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
+packages/web/server/lib/openchamber-sessions/worktree-move-bridge.ts	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/openchamber-sessions/worktree-move.test.js	fork-differs	decision	2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names	User-facing product name updated to OhPiChamber in copy, UI, CLI, or docs.
 packages/web/server/lib/openchamber-sessions/worktree-move.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Keeps the fork's per-call `setup`, `startDirectory` and `moveSession` contract, which the Host session service supplies and whose relocated sessions it returns.
 packages/web/server/lib/opencode-trust/DOCUMENTATION.md	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
@@ -5828,7 +5821,7 @@ packages/web/server/lib/package-manager.test.js	upstream-only	upstream-excluded	
 packages/web/server/lib/package-manager.ts	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/web/server/lib/permission-auto-accept/DOCUMENTATION.md	fork-differs	decision	2026-11-11 - Keep the lane 12 host-adjacent modules on the fork's Host owners in the v2.7.0 merge	Fork host-adjacent module keeps the Canonical/Host owner; upstream's OpenCode engine, wire-event and UI path is excluded by the OMP boundary.
 packages/web/server/lib/permission-auto-accept/contracts.ts	fork-differs	decision	2026-11-20 - Retain runtime-equivalent source compatibility cleanup	Type-only contracts, formatting or unused imports emit the same JavaScript after the recorded package rename.
-packages/web/server/lib/permission-auto-accept/host-channel.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
+packages/web/server/lib/permission-auto-accept/host-channel.ts	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/permission-auto-accept/runtime.test.js	fork-differs	decision	2026-11-11 - Keep the lane 12 host-adjacent modules on the fork's Host owners in the v2.7.0 merge	Tests the fork runtime and its registered routes; upstream tested OpenCode wire events, permission reply fetches and a hub subscription the fork runtime does not have.
 packages/web/server/lib/permission-auto-accept/runtime.ts	fork-differs	decision	2026-11-11 - Keep the lane 12 host-adjacent modules on the fork's Host owners in the v2.7.0 merge	Authoritative Host permission policy with its own routes and Canonical parentSessionId lineage; upstream's session.forked inheritance fetched an OpenCode session record the Agent Service does not serve.
 packages/web/server/lib/pr-watch/DOCUMENTATION.md	fork-differs	decision	2026-11-18 - Restart the technical debt sweep from main and fix every open entry	Updates documentation to remove references to deleted dead files (tech-debt-sweep/01).
@@ -5849,11 +5842,14 @@ packages/web/server/lib/projects/project-directory-runtime.ts	fork-differs	decis
 packages/web/server/lib/projects/project-setup.test.js	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	The setup view pins both the fork `worktreeDirectory` and upstream `teardownWorktree` fields.
 packages/web/server/lib/projects/project-setup.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Project setup carries both the fork `worktreeDirectory` override and upstream `teardownWorktree` commands.
 packages/web/server/lib/projects/routes-directory.test.js	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	The directory route test registers the fork Host middleware instead of the removed OpenCode core routes.
+packages/web/server/lib/projects/routes.ts	fork-differs	decision	2026-11-26 - Clear every solvable technical debt before the 1.0 release	Project routes type the fork Host settings persistence union (FormattedSettings) in the strict TypeScript conversion of the fork-owned server modules.
 packages/web/server/lib/projects/session-directory.test.js	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/web/server/lib/projects/session-directory.ts	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
+packages/web/server/lib/provider-read-cache/index.ts	fork-differs	decision	2026-11-26 - Clear every solvable technical debt before the 1.0 release	Provider read cache response typing strictened (required body, listener signatures) in the strict TypeScript conversion of the fork-owned server modules.
 packages/web/server/lib/quota/DOCUMENTATION.md	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Describes Host-selected native quota credentials and scoped usage loader; no OpenCode auth files or duplicate credential store are read.
 packages/web/server/lib/quota/console-budgets.test.js	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/web/server/lib/quota/console-budgets.ts	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
+packages/web/server/lib/quota/credentials/contracts.ts	fork-differs	decision	2026-11-26 - Clear every solvable technical debt before the 1.0 release	Credential JSON type widened for exactOptionalPropertyTypes in the strict TypeScript conversion of the fork-owned server modules.
 packages/web/server/lib/quota/credentials/providers.test.js	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/web/server/lib/quota/credentials/providers.ts	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/web/server/lib/quota/credentials/store.test.js	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
@@ -5863,7 +5859,7 @@ packages/web/server/lib/quota/extension-quota.ts	upstream-only	upstream-excluded
 packages/web/server/lib/quota/extension-quotas.test.js	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/web/server/lib/quota/extension-quotas.ts	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/web/server/lib/quota/extension-registry.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Quota providers keep the fork credential plumbing (`isConfigured(credential)`, `fetchQuota({ credential })`) instead of reading OpenCode auth files.
-packages/web/server/lib/quota/extension-service.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
+packages/web/server/lib/quota/extension-service.ts	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/quota/extension-service.test.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/quota/index.test.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/quota/index.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Exports Usage page providers alongside selected-native-credential quota fetchers; omits OpenCode auth readers and upstream extension/console budget authorities.
@@ -5921,7 +5917,7 @@ packages/web/server/lib/quota/providers/opencode.test.js	upstream-only	upstream-
 packages/web/server/lib/quota/providers/opencode.ts	upstream-only	upstream-excluded		Upstream-only path deleted by task 06 (a25dae1641): OpenCode quota provider retired.
 packages/web/server/lib/quota/providers/openrouter.test.js	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Quota providers keep the fork credential plumbing (`isConfigured(credential)`, `fetchQuota({ credential })`) instead of reading OpenCode auth files.
 packages/web/server/lib/quota/providers/openrouter.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Quota providers keep the fork credential plumbing (`isConfigured(credential)`, `fetchQuota({ credential })`) instead of reading OpenCode auth files.
-packages/web/server/lib/quota/providers/selected-credential.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
+packages/web/server/lib/quota/providers/selected-credential.ts	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/quota/providers/selected-credential.test.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/quota/providers/wafer.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Quota providers keep the fork credential plumbing (`isConfigured(credential)`, `fetchQuota({ credential })`) instead of reading OpenCode auth files.
 packages/web/server/lib/quota/providers/xai.test.js	upstream-only	upstream-excluded		Deleted: OMP native usage probes cover this provider, so the Host scraper and its tests are removed and the registry entry reads the canonical usage report.
@@ -5971,13 +5967,14 @@ packages/web/server/lib/scheduled-tasks/DOCUMENTATION.md	fork-differs	decision	2
 packages/web/server/lib/scheduled-tasks/chats-scope.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Scheduled tasks run through the Canonical session service and the Host worktree bridge, without the OpenCode model catalog reader.
 packages/web/server/lib/scheduled-tasks/existing-session.test.js	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
 packages/web/server/lib/scheduled-tasks/existing-session.ts	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
-packages/web/server/lib/scheduled-tasks/file-resource-prompt.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
+packages/web/server/lib/scheduled-tasks/file-resource-prompt.ts	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/scheduled-tasks/file-resource-prompt.test.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/scheduled-tasks/issue-2710-double-execution.test.js	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Scheduled tasks run through the Canonical session service and the Host worktree bridge, without the OpenCode model catalog reader.
 packages/web/server/lib/scheduled-tasks/loops.test.js	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Tests the fork loop parser's first-separator model IDs without importing the removed OpenCode markdown parser or its setLoopFileEnabled API.
 packages/web/server/lib/scheduled-tasks/loops.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Scheduled tasks run through the Canonical session service and the Host worktree bridge, without the OpenCode model catalog reader.
 packages/web/server/lib/scheduled-tasks/model-catalog.test.js	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/web/server/lib/scheduled-tasks/model-catalog.ts	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
+packages/web/server/lib/scheduled-tasks/routes.ts	fork-differs	decision	2026-11-26 - Clear every solvable technical debt before the 1.0 release	Scheduled-task route body types the enabled field as a JSON value in the strict TypeScript conversion of the fork-owned server modules.
 packages/web/server/lib/scheduled-tasks/runtime.test.js	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
 packages/web/server/lib/scheduled-tasks/runtime.ts	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
 packages/web/server/lib/scheduled-tasks/service.test.js	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Scheduled tasks run through the Canonical session service and the Host worktree bridge, without the OpenCode model catalog reader.
@@ -6014,6 +6011,7 @@ packages/web/server/lib/session-assist/runtime.test.js	fork-differs	decision	202
 packages/web/server/lib/session-assist/runtime.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Work and assist runtimes read session metadata through the Host store and dispatch on `/api/agent/v1`.
 packages/web/server/lib/session-assist/session-assist-lifecycle.test.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/web/server/lib/session-folders/DOCUMENTATION.md	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Session folders run on the Host SQLite store with change-based writes and tombstones, not the upstream JSON whole-copy merge file.
+packages/web/server/lib/session-folders/contracts.ts	fork-differs	decision	2026-11-26 - Clear every solvable technical debt before the 1.0 release	Session-folder contracts gained the fork Host SQLite conversion-status types in the strict TypeScript conversion of the fork-owned server modules.
 packages/web/server/lib/session-folders/folder-changes.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Session folders run on the Host SQLite store with change-based writes and tombstones, not the upstream JSON whole-copy merge file.
 packages/web/server/lib/session-folders/routes.test.js	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Session folders run on the Host SQLite store with change-based writes and tombstones, not the upstream JSON whole-copy merge file.
 packages/web/server/lib/session-folders/routes.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Session folders run on the Host SQLite store with change-based writes and tombstones, not the upstream JSON whole-copy merge file.
@@ -6089,6 +6087,7 @@ packages/web/server/lib/share-pages/runtime.ts	fork-differs	decision	2026-11-11 
 packages/web/server/lib/shared/contracts.test.ts	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/web/server/lib/shared/guards.test.js	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Drops the OpenCode `config-v2` re-export assertion the fork retired with that module.
 packages/web/server/lib/shared/http-contracts.ts	fork-differs	decision	2026-11-24 - Retire OpenCode Zen, OpenCode Go, OpenCode Console budgets, and residual OpenCode surfaces	Request-header contract widened for x-openchamber-directory by task 06 (a25dae1641).
+packages/web/server/lib/shared/json-values.ts	fork-differs	decision	2026-11-26 - Clear every solvable technical debt before the 1.0 release	Shared JSON-value module gained the Zod JsonValueSchema/jsonObjectSchema parsers the strict TypeScript conversion of the fork-owned server modules parses external input with.
 packages/web/server/lib/skills-catalog/DOCUMENTATION.md	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
 packages/web/server/lib/skills-catalog/disk-cache.ts	fork-differs	decision	2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names	User- and OS-facing product name, CLI, bundle ID, data dir, or deep-link scheme renamed to OhPiChamber/ohpichamber.
 packages/web/server/lib/skills-catalog/install.test.js	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
@@ -6134,147 +6133,112 @@ packages/web/server/lib/source-control/standard-mutations.ts	fork-differs	decisi
 packages/web/server/lib/source-control/status-cache.ts	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Only the recorded fork product/package naming differs from the pinned upstream source.
 packages/web/server/lib/source-control/test-support/service-login.ts	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Guest SDK renamed to ohpichamber-sdk and workspace/extension references updated for 1.0.0.
 packages/web/server/lib/spaces/DOCUMENTATION.md	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/code-in-bait.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/code-in-bait.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/code-in.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/code-in-bait.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/code-in.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/code-in.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/code-in.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/code-out-contracts.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/code-out.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/code-out.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/code-out.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/code-transfer.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/code-out.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/code-transfer.test.js	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/code-transfer.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/code-transfer.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/command-contracts.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/contracts.types.test.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/dispatcher.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/dispatcher.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/dispatcher.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/errors.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/errors.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/exec-http.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/exec-http.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/dispatcher.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/errors.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/exec-http.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/failure.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/gatekeeper-channel.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/gatekeeper-channel.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/gatekeeper-channel.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/gatekeeper-channel.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/gatekeeper-program.cjs	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/gatekeeper-program.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/hardening.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/hardening.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/hardening.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/hardening.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/host-catalog.test.js	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/host-catalog.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/host-git.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/host-git.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/host-git.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/host-git.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/host-providers.test.js	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/host-providers.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/host.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/host.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/host.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/idle-stop.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/host.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/idle-stop.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/idle-stop.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/journey.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/idle-stop.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/journey.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/journey.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/journey.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/json.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/labels.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/labels.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/layout.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/labels.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/layout.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/layout.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/layout.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/login-keeper.test.js	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/login-keeper.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/manager.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/manager.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/manager.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/manager.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/model-grants.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/DOCUMENTATION.md	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/code-out.docker.live.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/contract-suite.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/contract-suite.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/places/contract-suite.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/dispatcher.docker.live.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/docker-disk.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/places/docker-disk.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/docker-disk.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/docker-disk.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/docker-engine.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/places/docker-engine.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/docker-engine.test.js	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/docker-engine.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/docker-live-support.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/docker-live-support.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/docker-setup.test.js	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/docker-setup.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/docker-tools.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/docker-tools.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/places/docker-tools.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/docker-wire.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/docker.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/places/docker.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/docker.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/docker.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/escape-suite.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/places/escape-suite.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/escape-suite.test.js	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/escape-suite.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/fake-docker.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/fake-docker.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/places/fake-docker.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/grants.docker.live.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/memory-place.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/memory-place.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/places/memory-place.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/packed.docker.live.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/registry.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/places/registry.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/places/registry.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/registry.types.test.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/server.docker.live.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/sessions.docker.live.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/ssh-host.test.js	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/places/ssh-host.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/release.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/release.ts	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/release.test.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/routes.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/routes.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/routes.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/routes.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/run-command.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/run-command.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/run-command.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/run-command.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/space-archive.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/space-archive.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/space-archive.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/space-archive.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/space-events.test.js	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/space-events.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/space-fetch.test.js	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/space-fetch.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/space-native-archive.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/space-native-archive.ts	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/space-opencode.test.js	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/space-opencode.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/space-permission-default.test.js	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/space-permission-default.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/space-records.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/space-records.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/space-records.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/space-records.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/space-server.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/space-server.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/space-server.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/space-server.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/space-sessions.test.js	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/space-sessions.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/space-setting-file.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/space-setup.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/space-setup.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/space-setup.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/space-setup.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/task-title.test.js	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/task-title.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/tools-filler.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/tools-filler.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/tools-filler.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/tools-filler.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/tools-pack.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/tools-pack.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/tools-pack.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/tools-pack.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/tools.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/tools.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/tools.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/tools.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/websocket.js	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+packages/web/server/lib/spaces/websocket.ts	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/spaces/websocket.test.js	fork-differs	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-packages/web/server/lib/spaces/websocket.ts	upstream-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 packages/web/server/lib/terminal/DOCUMENTATION.md	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Documents the fork raw-plus-replay output model, the host environment overlay and the terminal-changed event.
 packages/web/server/lib/terminal/runtime.test.js	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Stable-only 1.0.0 release channel: canary channel removed and GitHub Releases updater configured.
 packages/web/server/lib/terminal/runtime.ts	fork-differs	decision	2026-11-19 - Replay terminal history at its recorded PTY sizes	Orders resize events with output and keeps their offsets in bounded history.

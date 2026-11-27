@@ -4,7 +4,7 @@
 
 import type { SpaceEntry, SpaceJournalRecord } from './spaces-api';
 
-// The allowlist's rule for a name, the server's own (`space-records.js`): labels of letters,
+// The allowlist's rule for a name, the server's own (`space-records.ts`): labels of letters,
 // digits and hyphens, with a real last label.
 const DOMAIN_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/;
 

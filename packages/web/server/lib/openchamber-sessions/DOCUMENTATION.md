@@ -15,7 +15,7 @@ checkout creation, bootstrap and removal.
   `409 METADATA_CONFLICT` without changing or announcing stale writes. Omission
   retains unconditional merge-patch behavior for non-read/modify/write callers.
 
-- `host/session-state.js` composes the stores with one explicit SQLite
+- `host/session-state.ts` composes the stores with one explicit SQLite
   connection and lifecycle. Shutdown fences new admissions, drains accepted
   work, then closes the shared connection.
 - `session-metadata-store.js` is the durable Host metadata authority. Its

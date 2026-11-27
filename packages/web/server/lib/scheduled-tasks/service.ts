@@ -1,9 +1,11 @@
-import { asNonEmptyString } from '../shared/guards.js';
-import { assertTaskTextWithinLimits } from '../projects/task-text-limits.js';
 import fs from 'node:fs';
+import { z } from 'zod';
+import { asNonEmptyString } from '../shared/guards.js';
+import type { JsonValue } from '../shared/json-values.js';
+import { assertTaskTextWithinLimits } from '../projects/task-text-limits.js';
 import { OpenChamberControlError } from '../openchamber-control/error.js';
 import { discoverLoopFiles, loopFingerprint, parseLoopDefinition, setLoopFileEnabled } from './loops.js';
-import type { SessionProject } from '../projects/contracts.js';
+import type { ScheduledTask, ScheduledTaskInput, SessionProject } from '../projects/contracts.js';
 import type { createProjectConfigRuntime } from '../projects/project-config.js';
 import type { SettingsDocument } from '../settings/settings-helpers.js';
 import type { createChatsScope } from './chats-scope.js';
@@ -18,9 +20,22 @@ export interface ScheduledTaskServiceDependencies {
   chatsScope?: Pick<ReturnType<typeof createChatsScope>, 'id' | 'root' | 'toStorageID'> | null;
 }
 
-// Same scope rule the scheduler applies: a file under the project's own
-// `.agents/loops` is a repository loop, even where it is also the user folder.
-const isRepositoryLoop = (projectPath, loopFile) => discoverLoopFiles(projectPath)
+export interface ScheduledTaskRunResponse {
+  task: ScheduledTask | null | undefined;
+  sessionId: string | undefined;
+  directory?: string;
+  persistError?: string;
+}
+
+export interface ResolveProjectIdInput {
+  projectId?: string | null;
+  workspaceId?: string | null;
+  directory?: string | null;
+}
+
+const TaskInputObjectSchema = z.looseObject({});
+
+const isRepositoryLoop = (projectPath: string, loopFile: string): boolean => discoverLoopFiles(projectPath)
   .some((entry) => entry.scope === 'project' && entry.filePath === loopFile);
 
 export const createScheduledTaskService = (dependencies: ScheduledTaskServiceDependencies) => {
@@ -33,14 +48,12 @@ export const createScheduledTaskService = (dependencies: ScheduledTaskServiceDep
     chatsScope = null,
   } = dependencies;
 
-  const listProjects = async () => {
+  const listProjects = async (): Promise<SessionProject[]> => {
     const settings = await readSettingsFromDiskMigrated();
     return sanitizeProjects(settings?.projects || []);
   };
 
-  // Resolves a project or the chats scope; every method below keys the
-  // runtime and config by the returned id, never by the raw request value.
-  const findProjectByID = async (projectID) => {
+  const findProjectByID = async (projectID: string): Promise<SessionProject> => {
     const requested = asNonEmptyString(projectID);
     if (!requested) throw new OpenChamberControlError('projectId is required', 400);
     const normalized = chatsScope ? chatsScope.toStorageID(requested) : requested;
@@ -51,23 +64,28 @@ export const createScheduledTaskService = (dependencies: ScheduledTaskServiceDep
     throw new OpenChamberControlError('Project not found', 404);
   };
 
-  const resolveProjectID = async ({ projectId, workspaceId } = {}) => {
+  const resolveProjectID = async ({ projectId, workspaceId }: ResolveProjectIdInput = {}): Promise<string> => {
     const requestedProjectID = asNonEmptyString(projectId);
     const requestedWorkspaceID = asNonEmptyString(workspaceId);
-    if (Boolean(requestedProjectID) === Boolean(requestedWorkspaceID)) throw new OpenChamberControlError('Provide exactly one of projectId or workspaceId', 400);
+    if (Boolean(requestedProjectID) === Boolean(requestedWorkspaceID)) {
+      throw new OpenChamberControlError('Provide exactly one of projectId or workspaceId', 400);
+    }
     if (requestedProjectID) return (await findProjectByID(requestedProjectID)).id;
-    if (typeof resolveWorkspaceScope !== 'function') throw new OpenChamberControlError('Workspace scope service is unavailable', 503);
+    if (!requestedWorkspaceID) throw new OpenChamberControlError('Provide exactly one of projectId or workspaceId', 400);
+    if (!resolveWorkspaceScope) throw new OpenChamberControlError('Workspace scope service is unavailable', 503);
     const scope = await resolveWorkspaceScope(requestedWorkspaceID);
-    if (!scope || scope.workspaceId !== requestedWorkspaceID || !scope.hostProjectId) throw new OpenChamberControlError('Workspace is not authorized', 404);
+    if (!scope || scope.workspaceId !== requestedWorkspaceID || !scope.hostProjectId) {
+      throw new OpenChamberControlError('Workspace is not authorized', 404);
+    }
     return (await findProjectByID(scope.hostProjectId)).id;
   };
 
-  const list = async (projectID) => {
+  const list = async (projectID: string): Promise<ScheduledTask[]> => {
     const { id } = await findProjectByID(projectID);
     return scheduledTasksRuntime.syncProject(id);
   };
 
-  const findLoopTask = async (projectID, taskID) => {
+  const findLoopTask = async (projectID: string, taskID: string): Promise<{ id: string; task: ScheduledTask & { loopFile: string } }> => {
     const { id } = await findProjectByID(projectID);
     const normalizedTaskID = asNonEmptyString(taskID);
     if (!normalizedTaskID) throw new OpenChamberControlError('taskId is required', 400);
@@ -76,16 +94,17 @@ export const createScheduledTaskService = (dependencies: ScheduledTaskServiceDep
     if (!task) throw new OpenChamberControlError('Task not found', 404);
     if (!task.loopFile) throw new OpenChamberControlError('Task is not managed by a loop file', 400);
     if (!fs.existsSync(task.loopFile)) throw new OpenChamberControlError('Loop file not found', 404);
-    return { id, task };
+    return { id, task: { ...task, loopFile: task.loopFile } };
   };
 
-  const setLoopEnabled = async (projectID, taskID, enabled) => {
-    if (typeof enabled !== 'boolean') {
+  const setLoopEnabled = async (projectID: string, taskID: string, enabled: JsonValue | undefined): Promise<ScheduledTask | null> => {
+    const parsedEnabled = z.boolean().safeParse(enabled);
+    if (!parsedEnabled.success) {
       throw new OpenChamberControlError('enabled must be a boolean', 400);
     }
     const { id, task } = await findLoopTask(projectID, taskID);
     try {
-      if (!setLoopFileEnabled(task.loopFile, enabled)) {
+      if (!setLoopFileEnabled(task.loopFile, parsedEnabled.data)) {
         throw new OpenChamberControlError('Loop file must be valid before changing its enabled state', 400);
       }
     } catch (error) {
@@ -93,15 +112,13 @@ export const createScheduledTaskService = (dependencies: ScheduledTaskServiceDep
       const message = error instanceof Error ? error.message : 'Failed to update loop file';
       throw new OpenChamberControlError(message, 500);
     }
-    // Enabling here is the user's approval of this version of the loop on
-    // this machine; a repository loop does not run on its file's word alone.
-    const definition = enabled ? parseLoopDefinition(task.loopFile) : null;
+    const definition = parsedEnabled.data ? parseLoopDefinition(task.loopFile) : null;
     await projectConfigRuntime.setLoopApproval(id, task.loopFile, definition ? loopFingerprint(definition) : null);
     const tasks = await scheduledTasksRuntime.syncProject(id);
     return tasks.find((entry) => entry.id === taskID) || null;
   };
 
-  const removeLoopFile = async (projectID, taskID) => {
+  const removeLoopFile = async (projectID: string, taskID: string): Promise<ScheduledTask[]> => {
     const { id, task } = await findLoopTask(projectID, taskID);
     try {
       fs.unlinkSync(task.loopFile);
@@ -112,9 +129,13 @@ export const createScheduledTaskService = (dependencies: ScheduledTaskServiceDep
     return scheduledTasksRuntime.syncProject(id);
   };
 
-  const upsert = async (projectID, taskInput) => {
+  const upsert = async (
+    projectID: string,
+    taskInput: ScheduledTaskInput,
+  ): Promise<{ tasks: ScheduledTask[]; task: ScheduledTask; created: boolean }> => {
     const { id } = await findProjectByID(projectID);
-    if (!taskInput || typeof taskInput !== 'object') {
+    const parsedInput = TaskInputObjectSchema.safeParse(taskInput);
+    if (!parsedInput.success) {
       throw new OpenChamberControlError('task payload is required', 400);
     }
     try {
@@ -122,11 +143,13 @@ export const createScheduledTaskService = (dependencies: ScheduledTaskServiceDep
     } catch (error) {
       throw new OpenChamberControlError(error instanceof Error ? error.message : 'Task text is too long', 400);
     }
-    let upserted;
-    const previous = taskInput.id ? (await projectConfigRuntime.listScheduledTasks(id)).find((task) => task.id === taskInput.id) : null;
-    if (taskInput.targetSessionId && (taskInput.enabled !== false || previous?.targetSessionId !== taskInput.targetSessionId)) {
-      await scheduledTasksRuntime.validateTarget(id, taskInput.targetSessionId);
+    const inputId = asNonEmptyString(taskInput.id);
+    const previous = inputId ? (await projectConfigRuntime.listScheduledTasks(id)).find((task) => task.id === inputId) : null;
+    const targetSessionId = asNonEmptyString(taskInput.targetSessionId);
+    if (targetSessionId && (taskInput.enabled !== false || previous?.targetSessionId !== targetSessionId)) {
+      await scheduledTasksRuntime.validateTarget(id, targetSessionId);
     }
+    let upserted: { task: ScheduledTask; tasks: ScheduledTask[]; created: boolean };
     try {
       upserted = await projectConfigRuntime.upsertScheduledTask(id, taskInput);
     } catch (error) {
@@ -134,8 +157,10 @@ export const createScheduledTaskService = (dependencies: ScheduledTaskServiceDep
       const invalid = message.toLowerCase().includes('required') || message.toLowerCase().includes('invalid');
       throw new OpenChamberControlError(message, invalid ? 400 : 500);
     }
-    if (previous?.targetSessionId && ((previous.enabled && upserted.task.enabled === false) || previous.targetSessionId !== upserted.task.targetSessionId)) {
-      await scheduledTasksRuntime.cancelWaitingPrompt(id, taskInput.id);
+    if (previous?.targetSessionId
+      && inputId
+      && ((previous.enabled && upserted.task.enabled === false) || previous.targetSessionId !== upserted.task.targetSessionId)) {
+      await scheduledTasksRuntime.cancelWaitingPrompt(id, inputId);
     }
     await scheduledTasksRuntime.syncProject(id);
     const tasks = await projectConfigRuntime.listScheduledTasks(id);
@@ -146,18 +171,13 @@ export const createScheduledTaskService = (dependencies: ScheduledTaskServiceDep
     };
   };
 
-  const remove = async (projectID, taskID) => {
+  const remove = async (projectID: string, taskID: string): Promise<ScheduledTask[]> => {
     const { id } = await findProjectByID(projectID);
     const normalizedTaskID = asNonEmptyString(taskID);
     if (!normalizedTaskID) throw new OpenChamberControlError('taskId is required', 400);
     const current = await projectConfigRuntime.listScheduledTasks(id);
     const existing = current.find((task) => task.id === normalizedTaskID) || null;
     if (existing?.loopFile && fs.existsSync(existing.loopFile)) {
-      // Loop tasks are owned by their `.agents/loops` markdown file: deleting
-      // the JSON row would be silently undone by the next reconcile while the
-      // file exists. The file itself is the removal surface. Once the file is
-      // gone (the task is an orphan that the next sync would remove anyway),
-      // deleting the row is safe and allowed.
       throw new OpenChamberControlError(
         'Loop task is managed by its .agents/loops markdown file; delete the file to remove the task',
         400,
@@ -170,7 +190,7 @@ export const createScheduledTaskService = (dependencies: ScheduledTaskServiceDep
     return projectConfigRuntime.listScheduledTasks(id);
   };
 
-  const run = async (projectID, taskID) => {
+  const run = async (projectID: string, taskID: string): Promise<ScheduledTaskRunResponse> => {
     const { id } = await findProjectByID(projectID);
     const normalizedTaskID = asNonEmptyString(taskID);
     if (!normalizedTaskID) throw new OpenChamberControlError('taskId is required', 400);
@@ -182,22 +202,18 @@ export const createScheduledTaskService = (dependencies: ScheduledTaskServiceDep
     if (!result.ok) {
       throw new OpenChamberControlError(result.error || 'Task run failed', result.statusCode || 500, { task: result.task });
     }
-    const response = {
+    const response: ScheduledTaskRunResponse = {
       task: result.task,
       sessionId: result.sessionID,
-      ...(typeof result.persistError === 'string' && result.persistError.trim()
-        ? { persistError: result.persistError.trim() }
-        : {}),
     };
+    if (result.persistError && result.persistError.trim()) {
+      response.persistError = result.persistError.trim();
+    }
     if (result.directory) response.directory = result.directory;
     return response;
   };
 
-  // The agent tool and the CLI. A loop task follows its file, so it changes
-  // the way the Scheduled tasks checkbox does. A repository loop is the
-  // exception for enabling: that is the user's own decision on this machine,
-  // made in Scheduled tasks, never by an agent or a script on their behalf.
-  const setEnabled = async (projectID, taskID, enabled) => {
+  const setEnabled = async (projectID: string, taskID: string, enabled: boolean): Promise<ScheduledTask | null> => {
     const project = await findProjectByID(projectID);
     const tasks = await scheduledTasksRuntime.syncProject(project.id);
     const task = tasks.find((entry) => entry?.id === taskID);
@@ -206,8 +222,6 @@ export const createScheduledTaskService = (dependencies: ScheduledTaskServiceDep
       const result = await upsert(project.id, { ...task, enabled });
       return result.task;
     }
-    // Nothing to change: the loop file, which may be tracked in the
-    // repository, and the approval stay untouched.
     if (enabled === task.enabled) return task;
     if (enabled && isRepositoryLoop(project.path, task.loopFile)) {
       throw new OpenChamberControlError(`"${task.name}" comes from this repository. Enable it in Scheduled tasks.`, 409);
@@ -216,7 +230,7 @@ export const createScheduledTaskService = (dependencies: ScheduledTaskServiceDep
   };
 
   const status = async () => {
-    if (typeof scheduledTasksRuntime.getStatus === 'function') {
+    if (scheduledTasksRuntime.getStatus) {
       return scheduledTasksRuntime.getStatus();
     }
     const projects = await listProjects();
@@ -254,3 +268,5 @@ export const createScheduledTaskService = (dependencies: ScheduledTaskServiceDep
     status,
   };
 };
+
+export type ScheduledTaskService = ReturnType<typeof createScheduledTaskService>;

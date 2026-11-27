@@ -54,7 +54,14 @@ for (let i = 0; i < 8; i++) {
   }
 }
 `;
-  const child = spawn(process.execPath, ['--input-type=module', '--eval', script, root], {
+  const child = spawn(process.execPath, [
+    '--import',
+    new URL('../../../scripts/register-server-sources.mjs', import.meta.url).href,
+    '--input-type=module',
+    '--eval',
+    script,
+    root,
+  ], {
     stdio: ['ignore', 'ignore', 'pipe'],
   });
   let stderr = '';

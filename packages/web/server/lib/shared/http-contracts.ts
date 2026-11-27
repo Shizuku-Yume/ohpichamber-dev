@@ -39,6 +39,7 @@ export interface Response<Body = unknown> extends ServerResponse {
   redirect(url: string): void;
   redirect(status: number, url: string): void;
   sendFile(filePath: string, options?: SendFileOptions, callback?: (error: Error | undefined) => void): void;
+  flush?: () => void;
 }
 
 export interface SendFileOptions {

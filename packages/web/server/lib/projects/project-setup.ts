@@ -28,16 +28,8 @@ const clamp = (value: string, maxLength: number) => (value.length > maxLength ? 
 
 const trimmedString = z.unknown().transform((value) => (isText(value) ? value.trim() : '')).parse;
 
-/**
- * `worktreeDirectory` is a personal path override for new worktrees. Only a
- * non-empty string is meaningful; anything else reads as unset.
- */
-const normalizeWorktreeDirectory = (value) => trimmedString(value) || null;
+export const worktreeDirectoryOf = z.unknown().transform((raw) => (isObjectRecord(raw) ? trimmedString(raw.worktreeDirectory) || null : null)).parse;
 
-/** The personal worktree folder from a raw project document; null when unset. */
-export const worktreeDirectoryOf = (raw) => normalizeWorktreeDirectory(isObjectRecord(raw) ? raw.worktreeDirectory : null);
-
-/** Setup commands: non-empty trimmed strings, capped in count and length. */
 export const sanitizeSetupCommands = z.unknown().transform((value): string[] => {
   if (!Array.isArray(value)) return [];
   const commands = [];
@@ -121,8 +113,8 @@ export const projectSetupViewOf = z.unknown().transform((raw): PersonalProjectSe
   const primaryRaw = trimmedString(document.projectActionsPrimaryId);
   return {
     setupWorktree: sanitizeSetupCommands(document['setup-worktree']),
-    setupWorktreeWait: typeof document['setup-worktree-wait'] === 'boolean' ? document['setup-worktree-wait'] : null,
-    setupWorktreeMode: SETUP_WORKTREE_MODES.has(document.setupWorktreeMode) ? document.setupWorktreeMode : 'append',
+    setupWorktreeWait: isBoolean(document['setup-worktree-wait']) ? document['setup-worktree-wait'] : null,
+    setupWorktreeMode: isWorktreeMode(document.setupWorktreeMode) ? document.setupWorktreeMode : 'append',
     worktreeDirectory: worktreeDirectoryOf(document),
     teardownWorktree: sanitizeSetupCommands(document.teardownWorktree),
     createWorktreeCommand: sanitizeCreateWorktreeCommand(document.createWorktreeCommand),
@@ -186,9 +178,8 @@ export const projectSetupPatchToStored = z.unknown().transform((patch): StoredPr
   }
   if ('worktreeDirectory' in patch) {
     const value = patch.worktreeDirectory;
-    if (value !== null && typeof value !== 'string') throw new Error('worktreeDirectory must be a string or null');
-    // null (or a blank string) clears the personal override.
-    stored.worktreeDirectory = normalizeWorktreeDirectory(value) || undefined;
+    if (value !== null && !isText(value)) throw new Error('worktreeDirectory must be a string or null');
+    stored.worktreeDirectory = trimmedString(value) || undefined;
   }
   if ('sharedTrustHash' in patch) {
     const hash = patch.sharedTrustHash;

@@ -54,6 +54,7 @@ async function main() {
     });
     if (imports.status !== 0) throw new Error(`Packaged SDK/native import failed for ${specifier}: ${imports.error ?? imports.stderr}`);
   }
+  if (!process.versions.bun) await import('../../web/scripts/register-server-sources.mjs');
   const { createAgentServiceSupervisor } = await import('../../web/server/lib/host/agent-service-supervisor.js');
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-packaged-agent-'));
   const supervisor = createAgentServiceSupervisor({ ...runtime, dataDir: directory, env: { OHPICHAMBER_BUN: runtime.bunPath } });

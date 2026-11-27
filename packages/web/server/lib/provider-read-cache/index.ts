@@ -31,7 +31,7 @@ interface ProviderReadRequest {
 interface ProviderReadResponse {
   statusCode: number;
   status: (code: number) => ProviderReadResponse;
-  json: (body?: ProviderReadBody) => ProviderReadResponse;
+  json: (body: ProviderReadBody) => ProviderReadResponse;
   on: (event: 'finish' | 'close', listener: () => void) => ProviderReadResponse;
 }
 
@@ -158,8 +158,8 @@ export function createProviderReadCache({
   sourceControlProviderIds = sourceControlProviderDescriptors.list().map((descriptor) => descriptor.id),
   trackerIds = [],
   now = Date.now,
-  onChange = () => {},
-  onItemRefresh = () => {},
+  onChange = () => { },
+  onItemRefresh = () => { },
 }: ProviderReadCacheOptions = {}) {
   const sourceControlRoutes = sourceControlProviderIds.map((provider) => ({ prefix: `/api/source-control/${provider}`, provider, tracker: false }));
   const hasTracker = (provider: string) => (isTrackerIdReader(trackerIds) ? trackerIds() : trackerIds).includes(provider);

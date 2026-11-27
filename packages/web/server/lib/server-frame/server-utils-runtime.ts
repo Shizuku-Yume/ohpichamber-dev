@@ -1,8 +1,18 @@
+import type * as nodeOs from 'node:os';
+import type * as nodePath from 'node:path';
 import { findExecutableOnPath } from '../tunnels/executable-search.js';
 import { isExecutable } from '../host/executable.js';
 import { pathLooksUserConfigured, mergePathValues } from '../host/path-utils.js';
+import { isString } from '../shared/object-guards.js';
 
-export const createServerUtilsRuntime = (dependencies) => {
+export interface ServerUtilsDependencies {
+  os: Pick<typeof nodeOs, 'homedir'>;
+  path: Pick<typeof nodePath, 'delimiter'>;
+  process: Pick<NodeJS.Process, 'env'>;
+  getLoginShellPath?: () => string;
+}
+
+export const createServerUtilsRuntime = (dependencies: ServerUtilsDependencies) => {
   const {
     os,
     path,
@@ -10,11 +20,13 @@ export const createServerUtilsRuntime = (dependencies) => {
     getLoginShellPath = () => process.env.PATH || '',
   } = dependencies;
 
-  const getEnvValue = (name) => {
+  const getEnvValue = (name: string) => {
     const env = process.env || {};
-    if (typeof env[name] === 'string') return env[name];
+    const direct = env[name];
+    if (isString(direct)) return direct;
     const key = Object.keys(env).find((candidate) => candidate.toLowerCase() === name.toLowerCase());
-    return key && typeof env[key] === 'string' ? env[key] : '';
+    const matched = key ? env[key] : undefined;
+    return isString(matched) ? matched : '';
   };
 
   const buildAugmentedPath = () => {
@@ -28,7 +40,7 @@ export const createServerUtilsRuntime = (dependencies) => {
     return mergePathValues(primaryPath, fallbackPath, path.delimiter);
   };
 
-  const searchPathFor = (binaryName, searchPath = getEnvValue('PATH')) =>
+  const searchPathFor = (binaryName: string, searchPath = getEnvValue('PATH')) =>
     findExecutableOnPath(binaryName, { env: { ...process.env, PATH: searchPath } });
 
   return {

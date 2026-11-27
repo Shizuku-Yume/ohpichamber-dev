@@ -5,7 +5,7 @@ import type { ReadNativeReports } from './native.js';
 
 type Quota = typeof import('./index.js');
 type Selections = ReturnType<typeof createCatalogCredentialSelections>;
-type Scope = { workspaceId: string; agentDirectoryId: string };
+type Scope = { workspaceId: string; agentDirectoryId?: string | undefined };
 
 export const createSelectedUsageQuota = ({ loadQuota, listQuotaSelections, resolveQuotaSelection, resolveCredential, readNativeReports }: Pick<Selections, 'listQuotaSelections' | 'resolveQuotaSelection'> & {
   loadQuota: () => Promise<Quota>;
@@ -13,7 +13,10 @@ export const createSelectedUsageQuota = ({ loadQuota, listQuotaSelections, resol
   readNativeReports?: ReadNativeReports;
 }) => async (scope: Scope) => {
   const quota = await loadQuota();
-  const request = { query: { workspaceId: scope.workspaceId, agentDirectoryId: scope.agentDirectoryId } };
+  const query = scope.agentDirectoryId
+    ? { workspaceId: scope.workspaceId, agentDirectoryId: scope.agentDirectoryId }
+    : { workspaceId: scope.workspaceId };
+  const request = { query };
   return {
     listUsagePageProviders: quota.listUsagePageProviders,
     listConfiguredQuotaProviders: async () => quota.listConfiguredQuotaProviders({ selections: await listQuotaSelections(request) }),

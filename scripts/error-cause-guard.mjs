@@ -8,7 +8,7 @@
 //    `scripts/error-cause-baseline.json`; the count may shrink, never grow.
 //
 // 2. A Host policy refusal names the check that refused it. `denied(` in
-//    `worker-operation-authorizer.js` requires a reason argument; a refusal
+//    `worker-operation-authorizer.ts` requires a reason argument; a refusal
 //    without one is the defect this guardrail exists to stop.
 //
 // Usage:
@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const UI_ROOT = path.join(REPO_ROOT, 'packages/ui/src');
 const BASELINE = path.join(REPO_ROOT, 'scripts/error-cause-baseline.json');
-const AUTHORIZER = path.join(REPO_ROOT, 'packages/web/server/lib/host/worker-operation-authorizer.js');
+const AUTHORIZER = path.join(REPO_ROOT, 'packages/web/server/lib/host/worker-operation-authorizer.ts');
 
 // A failure shown as a translated sentence. `problemMessage(error, t(…))` is the
 // accepted form: the cause wins and the translation is the fallback.

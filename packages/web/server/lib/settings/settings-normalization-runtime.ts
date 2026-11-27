@@ -1,6 +1,82 @@
 import { modelRefKey } from '@openchamber/agent-contract';
+import type * as nodeOs from 'node:os';
+import type * as nodePath from 'node:path';
+import { z } from 'zod';
+import { isBoolean, isRecord, isString } from '../shared/object-guards.js';
 
-export const createSettingsNormalizationRuntime = (dependencies) => {
+const rawValueSchema = z.unknown();
+export type RawValue = z.infer<typeof rawValueSchema>;
+const rawDocumentSchema = z.looseObject({});
+type RawDocument = z.infer<typeof rawDocumentSchema>;
+
+const isObjectLike = (value: unknown): value is RawDocument => Boolean(value && typeof value === 'object');
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+
+export interface SettingsNormalizationDependencies {
+  os: Pick<typeof nodeOs, 'homedir'>;
+  path: Pick<typeof nodePath, 'delimiter' | 'join' | 'resolve'>;
+  processLike: Pick<NodeJS.Process, 'platform'>;
+  realpathSync?: (path: string) => string;
+  readdirSync?: (path: string) => string[];
+  tunnelBootstrapTtlDefaultMs: number;
+  tunnelBootstrapTtlMinMs: number;
+  tunnelBootstrapTtlMaxMs: number;
+  tunnelSessionTtlDefaultMs: number;
+  tunnelSessionTtlMinMs: number;
+  tunnelSessionTtlMaxMs: number;
+}
+
+export interface NormalizedProjectIconImage {
+  mime: string;
+  updatedAt: number;
+  source: 'custom' | 'auto';
+}
+
+export interface NormalizedProject {
+  id: string;
+  path: string;
+  label?: string;
+  labelSource?: 'manual' | 'auto';
+  icon?: string;
+  iconImage?: NormalizedProjectIconImage | null;
+  iconBackground?: string | null;
+  color?: string;
+  defaultModel?: string;
+  defaultVariant?: string;
+  addedAt?: number;
+  lastOpenedAt?: number;
+  sidebarCollapsed?: boolean;
+}
+
+export interface ManagedRemoteTunnelPreset {
+  id: string;
+  name: string;
+  hostname: string;
+}
+
+export interface TypographySizesPartial {
+  markdown?: string;
+  code?: string;
+  uiHeader?: string;
+  uiLabel?: string;
+  meta?: string;
+  micro?: string;
+}
+
+export interface NormalizedModelRef {
+  providerID: string;
+  modelID: string;
+}
+
+export interface NormalizedSkillCatalog {
+  id: string;
+  label: string;
+  source: string;
+  subpath?: string;
+  gitIdentityId?: string;
+}
+
+export const createSettingsNormalizationRuntime = (dependencies: SettingsNormalizationDependencies) => {
   const {
     os,
     path,
@@ -15,15 +91,14 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     tunnelSessionTtlMaxMs,
   } = dependencies;
 
-  const normalizeDirectoryPath = (value) => {
-    if (typeof value !== 'string') {
+  function normalizeDirectoryPath(value: string): string;
+  function normalizeDirectoryPath<Value>(value: Value): Value extends string ? string : Value;
+  function normalizeDirectoryPath<Value>(value: Value): string | Value {
+    if (!isString(value)) {
       return value;
     }
 
     let trimmed = value.trim();
-    // Paths pasted from Windows "Copy as path" (or quoted shell snippets)
-    // arrive wrapped in quotes — a literal quote character can never be part
-    // of a real path, and it breaks every fs.stat/executable check.
     if (trimmed.length >= 2
       && ((trimmed.startsWith('"') && trimmed.endsWith('"'))
         || (trimmed.startsWith("'") && trimmed.endsWith("'")))) {
@@ -42,32 +117,18 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     }
 
     return trimmed;
-  };
+  }
 
-  // On case-insensitive but case-preserving filesystems (APFS default, NTFS)
-  // `realpathSync` resolves symlinks but returns the path with whatever casing
-  // was passed in — it does NOT report the on-disk casing. A project registered
-  // as `/Users/me/desktop/…` therefore stays lowercase even after realpath, and
-  // later case-sensitive `===` comparisons against the real (capitalized)
-  // session `directory` reported by opencode/git silently fail, mis-grouping
-  // sessions under a phantom worktree (issue #1913). We recover the true casing
-  // by walking each path component through readdir, preferring an exact match so
-  // that a case-SENSITIVE filesystem (where two entries may legitimately differ
-  // only by case) is never rewritten. Gated to case-insensitive platforms.
-  const CASE_INSENSITIVE_PLATFORMS = new Set(['win32', 'darwin']);
+  const CASE_INSENSITIVE_PLATFORMS = new Set<NodeJS.Platform>(['win32', 'darwin']);
 
-  const rootLengthOf = (value) => {
+  const rootLengthOf = (value: string) => {
     const drive = /^[a-zA-Z]:[\\/]/.exec(value);
     if (drive) return 3;
     return value.startsWith('/') ? 1 : 0;
   };
 
-  // `listings` (directory -> entries, or null when unreadable) lets one pass over
-  // many paths read each shared ancestor once: projects mostly sit under the
-  // same few folders, and reading each of them again per project was 71 × 6
-  // synchronous readdirs per settings read on a 71-project workspace (#6084).
-  const canonicalizePathCase = (value, listings) => {
-    if (!readdirSync || typeof value !== 'string' || !value) return value;
+  const canonicalizePathCase = (value: string, listings?: Map<string, string[] | null>): string => {
+    if (!readdirSync || !value) return value;
     if (!CASE_INSENSITIVE_PLATFORMS.has(processLike?.platform)) return value;
 
     let result = value;
@@ -75,8 +136,6 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
       const rootLength = rootLengthOf(value);
       if (rootLength === 0) return value;
       const root = value.slice(0, rootLength);
-      // Only Windows treats a backslash as a separator; on macOS it is a legal
-      // name character, so `A\\B` must stay one segment.
       const separator = processLike.platform === 'win32' ? /[\\/]+/ : /\/+/;
       const segments = value.slice(rootLength).split(separator).filter(Boolean);
       let current = root;
@@ -90,11 +149,11 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
           }
           listings?.set(current, entries);
         }
-        if (!entries) return value; // cannot read this level (missing/permission) — keep original
-        let next = segment;
+        if (!entries) return value;
+        let next: string | undefined = segment;
         if (!entries.includes(segment)) {
           next = entries.find((entry) => entry.toLowerCase() === segment.toLowerCase());
-          if (!next) return value; // component doesn't exist — don't rewrite
+          if (!next) return value;
         }
         current = path.join(current, next);
       }
@@ -105,33 +164,33 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     return result;
   };
 
-  // Resolve symlinks and canonical case. A path realpath cannot resolve
-  // (missing, no permission) is kept exactly as stored: recovering its case
-  // could land on a different, existing sibling such as /volume/Foo for a
-  // missing /volume/foo.
-  const safeRealpathSync = (value, listings) => {
-    if (typeof value !== 'string' || !value) {
+  function safeRealpathSync(value: string, listings?: Map<string, string[] | null>): string;
+  function safeRealpathSync<Value>(value: Value, listings?: Map<string, string[] | null>): Value extends string ? string : Value;
+  function safeRealpathSync<Value>(value: Value, listings?: Map<string, string[] | null>): string | Value {
+    if (!isString(value) || !value) {
       return value;
     }
     if (!realpathSync) {
       return canonicalizePathCase(value, listings);
     }
-    let resolved;
+    let resolved: string;
     try {
       resolved = realpathSync(value);
     } catch {
       return value;
     }
     return canonicalizePathCase(resolved, listings);
-  };
+  }
 
-  const normalizePathForPersistence = (value, options = {}) => {
-    if (typeof value !== 'string') {
+  function normalizePathForPersistence(value: string, options?: { resolveRealpath?: boolean }): string;
+  function normalizePathForPersistence<Value>(value: Value, options?: { resolveRealpath?: boolean }): Value extends string ? string : Value;
+  function normalizePathForPersistence<Value>(value: Value, options: { resolveRealpath?: boolean } = {}): string | Value {
+    if (!isString(value)) {
       return value;
     }
 
     const normalized = normalizeDirectoryPath(value);
-    if (typeof normalized !== 'string') {
+    if (!isString(normalized)) {
       return normalized;
     }
 
@@ -140,20 +199,14 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
       return trimmed;
     }
 
-    // Normalize Windows drive letter to uppercase to ensure consistent
-    // case across all path representations on Windows. NTFS is case-insensitive
-    // but case-preserving, so a path like "c:\\Users\\..." and "C:\\Users\\..."
-    // would be stored differently in settings.json across sessions.
-    const uppercaseDriveLetter = (p) =>
-      p.replace(/^([a-z]):/, (_, letter) => letter.toUpperCase() + ':');
+    const uppercaseDriveLetter = (p: string) =>
+      p.replace(/^([a-z]):/, (_, letter: string) => letter.toUpperCase() + ':');
 
     const isWindows = processLike.platform === 'win32';
     const caseNormalized = isWindows ? uppercaseDriveLetter(trimmed) : trimmed;
     const resolved = options.resolveRealpath === false ? caseNormalized : safeRealpathSync(caseNormalized);
 
-    // Re-normalize after realpath — safeRealpathSync may return a
-    // lowercase drive letter on some Windows environments.
-    const finalResolved = isWindows && typeof resolved === 'string'
+    const finalResolved = isWindows && isString(resolved)
       ? uppercaseDriveLetter(resolved)
       : resolved;
 
@@ -162,10 +215,10 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     }
 
     return finalResolved.replace(/\//g, '\\');
-  };
+  }
 
-  const areStringArraysEqual = (a, b) => {
-    if (!Array.isArray(a) || !Array.isArray(b)) {
+  const areStringArraysEqual = (a: string[], b: RawValue) => {
+    if (!Array.isArray(b)) {
       return false;
     }
     if (a.length !== b.length) {
@@ -179,25 +232,25 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     return true;
   };
 
-  const normalizeStringArray = (input) => {
+  const normalizeStringArray = (input: RawValue): string[] => {
     if (!Array.isArray(input)) {
       return [];
     }
     return Array.from(
       new Set(
-        input.filter((entry) => typeof entry === 'string' && entry.length > 0)
-      )
+        input.filter((entry): entry is string => isString(entry) && entry.length > 0),
+      ),
     );
   };
 
-  const sanitizeProjects = (input) => {
+  const sanitizeProjects = (input: RawValue): NormalizedProject[] | undefined => {
     if (!Array.isArray(input)) {
       return undefined;
     }
 
     const hexColorPattern = /^#(?:[\da-fA-F]{3}|[\da-fA-F]{6})$/;
-    const normalizeIconBackground = (value) => {
-      if (typeof value !== 'string') {
+    const normalizeIconBackground = (value: RawValue): string | null => {
+      if (!isString(value)) {
         return null;
       }
       const trimmed = value.trim();
@@ -207,35 +260,31 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
       return hexColorPattern.test(trimmed) ? trimmed.toLowerCase() : null;
     };
 
-    const result = [];
-    const seenIds = new Set();
-    const seenPaths = new Set();
-    const listings = new Map();
+    const result: NormalizedProject[] = [];
+    const seenIds = new Set<string>();
+    const seenPaths = new Set<string>();
+    const listings = new Map<string, string[] | null>();
 
     for (const entry of input) {
-      if (!entry || typeof entry !== 'object') continue;
+      if (!isObjectLike(entry)) continue;
 
       const candidate = entry;
-      const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
-      const rawPath = typeof candidate.path === 'string' ? candidate.path.trim() : '';
+      const id = isString(candidate.id) ? candidate.id.trim() : '';
+      const rawPath = isString(candidate.path) ? candidate.path.trim() : '';
       const resolvedPath = rawPath ? safeRealpathSync(path.resolve(normalizeDirectoryPath(rawPath)), listings) : '';
       const normalizedPath = resolvedPath ? normalizePathForPersistence(resolvedPath, { resolveRealpath: false }) : '';
-      const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
+      const label = isString(candidate.label) ? candidate.label.trim() : '';
       const labelSource = candidate.labelSource === 'manual' || candidate.labelSource === 'auto'
         ? candidate.labelSource
         : '';
-      const icon = typeof candidate.icon === 'string' ? candidate.icon.trim() : '';
-      const iconImage = candidate.iconImage && typeof candidate.iconImage === 'object'
-        ? candidate.iconImage
-        : null;
+      const icon = isString(candidate.icon) ? candidate.icon.trim() : '';
+      const iconImage = isObjectLike(candidate.iconImage) ? candidate.iconImage : null;
       const iconBackground = normalizeIconBackground(candidate.iconBackground);
-      const color = typeof candidate.color === 'string' ? candidate.color.trim() : '';
-      const defaultModel = typeof candidate.defaultModel === 'string' ? candidate.defaultModel.trim() : '';
-      const defaultVariant = typeof candidate.defaultVariant === 'string' ? candidate.defaultVariant.trim() : '';
-      const addedAt = Number.isFinite(candidate.addedAt) ? Number(candidate.addedAt) : null;
-      const lastOpenedAt = Number.isFinite(candidate.lastOpenedAt)
-        ? Number(candidate.lastOpenedAt)
-        : null;
+      const color = isString(candidate.color) ? candidate.color.trim() : '';
+      const defaultModel = isString(candidate.defaultModel) ? candidate.defaultModel.trim() : '';
+      const defaultVariant = isString(candidate.defaultVariant) ? candidate.defaultVariant.trim() : '';
+      const addedAt = isFiniteNumber(candidate.addedAt) ? candidate.addedAt : null;
+      const lastOpenedAt = isFiniteNumber(candidate.lastOpenedAt) ? candidate.lastOpenedAt : null;
 
       if (!id || !normalizedPath) continue;
       if (seenIds.has(id)) continue;
@@ -244,27 +293,24 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
       seenIds.add(id);
       seenPaths.add(normalizedPath);
 
-      const project = {
-        id,
-        path: normalizedPath,
-        ...(label ? { label } : {}),
-        ...(icon ? { icon } : {}),
-        ...(iconBackground ? { iconBackground } : {}),
-        ...(color ? { color } : {}),
-        ...(defaultModel && defaultModel.includes('/') ? { defaultModel } : {}),
-        // A variant is meaningless without the model it belongs to.
-        ...(defaultModel && defaultModel.includes('/') && defaultVariant ? { defaultVariant } : {}),
-        ...(Number.isFinite(addedAt) && addedAt >= 0 ? { addedAt } : {}),
-        ...(Number.isFinite(lastOpenedAt) && lastOpenedAt >= 0 ? { lastOpenedAt } : {}),
-      };
-
+      const project: NormalizedProject = { id, path: normalizedPath };
+      if (label) project.label = label;
+      if (icon) project.icon = icon;
+      if (iconBackground) project.iconBackground = iconBackground;
+      if (color) project.color = color;
+      if (defaultModel && defaultModel.includes('/')) {
+        project.defaultModel = defaultModel;
+        if (defaultVariant) project.defaultVariant = defaultVariant;
+      }
+      if (addedAt !== null && addedAt >= 0) project.addedAt = addedAt;
+      if (lastOpenedAt !== null && lastOpenedAt >= 0) project.lastOpenedAt = lastOpenedAt;
       if (label && labelSource) project.labelSource = labelSource;
 
       if (candidate.iconImage === null) {
         project.iconImage = null;
       } else if (iconImage) {
-        const mime = typeof iconImage.mime === 'string' ? iconImage.mime.trim() : '';
-        const updatedAt = typeof iconImage.updatedAt === 'number' && Number.isFinite(iconImage.updatedAt)
+        const mime = isString(iconImage.mime) ? iconImage.mime.trim() : '';
+        const updatedAt = isFiniteNumber(iconImage.updatedAt)
           ? Math.max(0, Math.round(iconImage.updatedAt))
           : 0;
         const source = iconImage.source === 'custom' || iconImage.source === 'auto'
@@ -279,7 +325,7 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
         project.iconBackground = null;
       }
 
-      if (typeof candidate.sidebarCollapsed === 'boolean') {
+      if (isBoolean(candidate.sidebarCollapsed)) {
         project.sidebarCollapsed = candidate.sidebarCollapsed;
       }
 
@@ -289,9 +335,9 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     return result;
   };
 
-  const normalizeSettingsPaths = (input) => {
-    const settings = input && typeof input === 'object' ? input : {};
-    let next = settings;
+  const normalizeSettingsPaths = (input: RawValue) => {
+    const settings: RawDocument = isObjectLike(input) ? input : {};
+    let next: RawDocument = settings;
     let changed = false;
 
     const ensureNext = () => {
@@ -300,30 +346,32 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
       }
     };
 
-    const normalizePathField = (key) => {
-      if (typeof settings[key] !== 'string' || settings[key].length === 0) {
+    const normalizePathField = (key: 'lastDirectory' | 'homeDirectory') => {
+      const current = settings[key];
+      if (!isString(current) || current.length === 0) {
         return;
       }
-      const normalized = normalizePathForPersistence(settings[key]);
-      if (normalized !== settings[key]) {
+      const normalized = normalizePathForPersistence(current);
+      if (normalized !== current) {
         ensureNext();
         next[key] = normalized;
         changed = true;
       }
     };
 
-    const normalizePathArrayField = (key) => {
-      if (!Array.isArray(settings[key])) {
+    const normalizePathArrayField = (key: 'pinnedDirectories') => {
+      const current = settings[key];
+      if (!Array.isArray(current)) {
         return;
       }
 
       const normalized = normalizeStringArray(
-        settings[key]
-          .map((entry) => (typeof entry === 'string' ? normalizePathForPersistence(entry) : entry))
-          .filter((entry) => typeof entry === 'string' && entry.length > 0)
+        current
+          .map((entry) => (isString(entry) ? normalizePathForPersistence(entry) : entry))
+          .filter((entry): entry is string => isString(entry) && entry.length > 0),
       );
 
-      if (!areStringArraysEqual(normalized, settings[key])) {
+      if (!areStringArraysEqual(normalized, current)) {
         ensureNext();
         next[key] = normalized;
         changed = true;
@@ -346,27 +394,27 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     return { settings: next, changed };
   };
 
-  const clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
+  const clampNumber = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
-  const normalizeTunnelBootstrapTtlMs = (value) => {
+  const normalizeTunnelBootstrapTtlMs = (value: RawValue): number | null => {
     if (value === null) {
       return null;
     }
-    if (!Number.isFinite(value)) {
+    if (!isFiniteNumber(value)) {
       return tunnelBootstrapTtlDefaultMs;
     }
     return clampNumber(Math.round(value), tunnelBootstrapTtlMinMs, tunnelBootstrapTtlMaxMs);
   };
 
-  const normalizeTunnelSessionTtlMs = (value) => {
-    if (!Number.isFinite(value)) {
+  const normalizeTunnelSessionTtlMs = (value: RawValue): number => {
+    if (!isFiniteNumber(value)) {
       return tunnelSessionTtlDefaultMs;
     }
     return clampNumber(Math.round(value), tunnelSessionTtlMinMs, tunnelSessionTtlMaxMs);
   };
 
-  const normalizeManagedRemoteTunnelHostname = (value) => {
-    if (typeof value !== 'string') {
+  const normalizeManagedRemoteTunnelHostname = (value: RawValue): string | undefined => {
+    if (!isString(value)) {
       return undefined;
     }
     const trimmed = value.trim();
@@ -392,20 +440,20 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     return hostname;
   };
 
-  const normalizeManagedRemoteTunnelPresets = (value) => {
+  const normalizeManagedRemoteTunnelPresets = (value: RawValue): ManagedRemoteTunnelPreset[] | undefined => {
     if (!Array.isArray(value)) {
       return undefined;
     }
 
-    const result = [];
-    const seenIds = new Set();
-    const seenHostnames = new Set();
+    const result: ManagedRemoteTunnelPreset[] = [];
+    const seenIds = new Set<string>();
+    const seenHostnames = new Set<string>();
 
     for (const entry of value) {
-      if (!entry || typeof entry !== 'object') continue;
+      if (!isObjectLike(entry)) continue;
       const candidate = entry;
-      const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
-      const name = typeof candidate.name === 'string' ? candidate.name.trim() : '';
+      const id = isString(candidate.id) ? candidate.id.trim() : '';
+      const name = isString(candidate.name) ? candidate.name.trim() : '';
       const hostname = normalizeManagedRemoteTunnelHostname(candidate.hostname);
       if (!id || !name || !hostname) continue;
       if (seenIds.has(id) || seenHostnames.has(hostname)) continue;
@@ -417,15 +465,15 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     return result;
   };
 
-  const normalizeManagedRemoteTunnelPresetTokens = (value) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  const normalizeManagedRemoteTunnelPresetTokens = (value: RawValue): Record<string, string> | undefined => {
+    if (!isRecord(value)) {
       return undefined;
     }
 
-    const result = {};
+    const result: Record<string, string> = {};
     for (const [rawId, rawToken] of Object.entries(value)) {
-      const id = typeof rawId === 'string' ? rawId.trim() : '';
-      const token = typeof rawToken === 'string' ? rawToken.trim() : '';
+      const id = rawId.trim();
+      const token = isString(rawToken) ? rawToken.trim() : '';
       if (!id || !token) {
         continue;
       }
@@ -435,17 +483,18 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     return Object.keys(result).length > 0 ? result : undefined;
   };
 
-  const sanitizeTypographySizesPartial = (input) => {
-    if (!input || typeof input !== 'object') {
+  const sanitizeTypographySizesPartial = (input: RawValue): TypographySizesPartial | undefined => {
+    if (!isObjectLike(input)) {
       return undefined;
     }
     const candidate = input;
-    const result = {};
+    const result: TypographySizesPartial = {};
     let populated = false;
 
-    const assign = (key) => {
-      if (typeof candidate[key] === 'string' && candidate[key].length > 0) {
-        result[key] = candidate[key];
+    const assign = (key: keyof TypographySizesPartial) => {
+      const value = candidate[key];
+      if (isString(value) && value.length > 0) {
+        result[key] = value;
         populated = true;
       }
     };
@@ -460,18 +509,18 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     return populated ? result : undefined;
   };
 
-  const sanitizeModelRefs = (input, limit) => {
+  const sanitizeModelRefs = (input: RawValue, limit: number): NormalizedModelRef[] | undefined => {
     if (!Array.isArray(input)) {
       return undefined;
     }
 
-    const result = [];
-    const seen = new Set();
+    const result: NormalizedModelRef[] = [];
+    const seen = new Set<string>();
 
     for (const entry of input) {
-      if (!entry || typeof entry !== 'object') continue;
-      const providerID = typeof entry.providerID === 'string' ? entry.providerID.trim() : '';
-      const modelID = typeof entry.modelID === 'string' ? entry.modelID.trim() : '';
+      if (!isObjectLike(entry)) continue;
+      const providerID = isString(entry.providerID) ? entry.providerID.trim() : '';
+      const modelID = isString(entry.modelID) ? entry.modelID.trim() : '';
       if (!providerID || !modelID) continue;
       const key = modelRefKey(providerID, modelID);
       if (seen.has(key)) continue;
@@ -483,34 +532,31 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     return result;
   };
 
-  const sanitizeSkillCatalogs = (input) => {
+  const sanitizeSkillCatalogs = (input: RawValue): NormalizedSkillCatalog[] | undefined => {
     if (!Array.isArray(input)) {
       return undefined;
     }
 
-    const result = [];
-    const seen = new Set();
+    const result: NormalizedSkillCatalog[] = [];
+    const seen = new Set<string>();
 
     for (const entry of input) {
-      if (!entry || typeof entry !== 'object') continue;
+      if (!isObjectLike(entry)) continue;
 
-      const id = typeof entry.id === 'string' ? entry.id.trim() : '';
-      const label = typeof entry.label === 'string' ? entry.label.trim() : '';
-      const source = typeof entry.source === 'string' ? entry.source.trim() : '';
-      const subpath = typeof entry.subpath === 'string' ? entry.subpath.trim() : '';
-      const gitIdentityId = typeof entry.gitIdentityId === 'string' ? entry.gitIdentityId.trim() : '';
+      const id = isString(entry.id) ? entry.id.trim() : '';
+      const label = isString(entry.label) ? entry.label.trim() : '';
+      const source = isString(entry.source) ? entry.source.trim() : '';
+      const subpath = isString(entry.subpath) ? entry.subpath.trim() : '';
+      const gitIdentityId = isString(entry.gitIdentityId) ? entry.gitIdentityId.trim() : '';
 
       if (!id || !label || !source) continue;
       if (seen.has(id)) continue;
       seen.add(id);
 
-      result.push({
-        id,
-        label,
-        source,
-        ...(subpath ? { subpath } : {}),
-        ...(gitIdentityId ? { gitIdentityId } : {}),
-      });
+      const catalog: NormalizedSkillCatalog = { id, label, source };
+      if (subpath) catalog.subpath = subpath;
+      if (gitIdentityId) catalog.gitIdentityId = gitIdentityId;
+      result.push(catalog);
     }
 
     return result;

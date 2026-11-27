@@ -5,7 +5,7 @@ import { createProjectIdFromPath } from './project-id.js';
 import { isProjectSetupValidationError } from './project-setup.js';
 import type { Application, Response } from '../shared/http-contracts.js';
 import type { DirectoryValidation, SessionProject } from './contracts.js';
-import type { SettingsDocument } from '../settings/settings-helpers.js';
+import type { FormattedSettings, SettingsDocument } from '../settings/settings-helpers.js';
 import type { createProjectConfigRuntime } from './project-config.js';
 
 export interface ProjectDirectoryDependencies {
@@ -13,7 +13,7 @@ export interface ProjectDirectoryDependencies {
   validateDirectoryPath: (directory: string) => Promise<DirectoryValidation>;
   readSettingsFromDisk: () => Promise<SettingsDocument>;
   sanitizeProjects: (projects: SettingsDocument[string]) => SessionProject[] | null | undefined;
-  persistSettings: (settings: { projects: SessionProject[]; activeProjectId: string; lastDirectory: string }) => Promise<SettingsDocument>;
+  persistSettings: (settings: { projects: SessionProject[]; activeProjectId: string; lastDirectory: string }) => Promise<FormattedSettings | SettingsDocument>;
 }
 
 export interface ProjectSetupDependencies {
@@ -62,14 +62,14 @@ export const registerProjectDirectoryRoutes = (app: Application, dependencies: P
       const nextProjects = existing
         ? existingProjects
         : [
-            ...existingProjects,
-            {
-              id: createProjectIdFromPath(resolvedPath),
-              path: resolvedPath,
-              addedAt: Date.now(),
-              lastOpenedAt: Date.now(),
-            },
-          ];
+          ...existingProjects,
+          {
+            id: createProjectIdFromPath(resolvedPath),
+            path: resolvedPath,
+            addedAt: Date.now(),
+            lastOpenedAt: Date.now(),
+          },
+        ];
 
       const activeProjectId = existing ? existing.id : createProjectIdFromPath(resolvedPath);
 

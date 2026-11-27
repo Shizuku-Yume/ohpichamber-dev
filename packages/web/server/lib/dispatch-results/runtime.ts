@@ -1,48 +1,29 @@
-// Results of sessions an agent dispatched and asked to hear back from.
-//
-// An agent that creates, sends to, or forks a session with `returnResult`
-// gets its answer at once and goes on. When the dispatched session's turn is
-// over, this runtime hands its final answer to the session that dispatched it
-// as a synthetic message and wakes that session, so the agent continues on its
-// own: background primary sessions, the way OpenCode 2 reports a background
-// subagent to its parent (core `session/subagent-completion.ts`).
-//
-// Event-driven: the Host event hub supplies canonical envelopes directly.
-// Pending deliveries are persisted so a restart still delivers them.
-
-import fs from 'fs';
-import path from 'path';
-import { z } from 'zod';
+import fs from 'node:fs';
+import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
+import type { CanonicalEvent, PromptRequest, Run, SessionRuntimeStatus } from '@openchamber/agent-contract';
+import { controlErrorFields } from '../openchamber-control/error.js';
+import { isString } from '../shared/guards.js';
 
-export const createMessageId = () => `msg_${randomUUID()}`;
+export const createMessageId = (): string => `msg_${randomUUID()}`;
 
 const FILE_NAME = 'dispatch-results.json';
 const FILE_VERSION = 1;
 const MAX_ENTRIES = 200;
-// Idle events arrive in bursts around a turn boundary.
 const QUIET_MS = 500;
-// While a subagent of the dispatched session runs, the turn is not over yet.
 const SUBAGENT_RECHECK_MS = 5_000;
-// An idle session without the run's `idle` record yet: the record lands with
-// the event, so a few short rechecks cover a projection that trails it.
 const SETTLE_RECHECK_MS = 2_000;
 const SETTLE_RECHECKS = 3;
 const RETRY_BASE_DELAY_MS = 2_000;
 const RETRY_MAX_DELAY_MS = 60_000;
 const MESSAGE_PAGE_LIMIT = 50;
-// The answer travels into the parent's context; a session that wrote a book
-// is cut, and the agent can read the rest with session.messages.
 const ANSWER_CHAR_LIMIT = 50_000;
-
 const DISPATCH_RESULT_SOURCE = 'openchamber-session';
 
-// Boundary schemas: the only place raw JSON (the file, OpenCode answers, hub
-// events) is inspected. Everything below branches on what they return.
 const sessionIdSchema = z.string().regex(/^[A-Za-z0-9_-]{4,128}$/);
 const messageIdSchema = z.string().min(1);
 const timeSchema = z.number().finite().nonnegative();
-
 const afterIdleSchema = z.string().min(1).nullable();
 
 const entrySchema = z.object({
@@ -50,32 +31,157 @@ const entrySchema = z.object({
   parentSessionId: sessionIdSchema,
   sessionId: sessionIdSchema,
   dispatchedAt: timeSchema,
-  // The newest end-of-run record before the dispatch; null when there was
-  // none. Entries written before this field compare clock times instead.
   afterIdleId: afterIdleSchema.optional(),
   messageId: messageIdSchema.optional(),
 });
 
 const storedFileSchema = z.object({ entries: z.array(z.unknown()) });
-
 const errorCodeSchema = z.object({ code: z.string() });
-const parse = (schema, value) => {
+
+type DispatchEntry = z.output<typeof entrySchema>;
+
+const parse = <S extends z.ZodType>(schema: S, value: Parameters<S['safeParse']>[0]): z.output<S> | null => {
   const parsed = schema.safeParse(value);
   return parsed.success ? parsed.data : null;
 };
 
-const retryDelay = (failures) => Math.min(RETRY_BASE_DELAY_MS * 2 ** Math.max(failures - 1, 0), RETRY_MAX_DELAY_MS);
+const errorMessageOf = (cause: Parameters<typeof controlErrorFields>[0]): string => {
+  const message = controlErrorFields(cause)?.message;
+  return isString(message) ? message : String(cause);
+};
 
-const unavailableError = (message, status) => Object.assign(new Error(message), { status });
+const isNotFound = (cause: Parameters<typeof controlErrorFields>[0]): boolean => {
+  const fields = controlErrorFields(cause);
+  return fields?.status === 404 || fields?.statusCode === 404;
+};
 
-export const escapeAttribute = (value) => value
+const retryDelay = (failures: number): number =>
+  Math.min(RETRY_BASE_DELAY_MS * 2 ** Math.max(failures - 1, 0), RETRY_MAX_DELAY_MS);
+
+const unavailableError = (message: string, status: number): Error & { status: number } =>
+  Object.assign(new Error(message), { status });
+
+export const escapeAttribute = (value: string): string => value
   .replace(/&/g, '&amp;')
   .replace(/"/g, '&quot;')
   .replace(/</g, '&lt;')
   .replace(/>/g, '&gt;');
 
-const messageText = (message) => (Array.isArray(message?.parts) ? message.parts : [])
-  .filter((part) => part?.type === 'text' && typeof part.content === 'string')
+export interface DispatchMessagePart {
+  type: string;
+  content?: string | undefined;
+}
+
+export interface DispatchMessage {
+  turnId: string;
+  role: string;
+  providerId?: string | null | undefined;
+  modelId?: string | null | undefined;
+  parts: DispatchMessagePart[];
+}
+
+export interface DispatchTurn {
+  turnId: string;
+  status: string;
+  finishedAt?: number | null | undefined;
+  error?: string | null | undefined;
+}
+
+export interface DispatchHistoryPage {
+  turns: DispatchTurn[];
+  messages: DispatchMessage[];
+}
+
+export interface DispatchLegacyRecord {
+  type?: string;
+  id?: string;
+  time?: { created?: number };
+  outcome?: 'succeeded' | 'failed' | 'interrupted' | 'stopped';
+  content?: Array<{ text?: string }>;
+  error?: { message?: string };
+}
+
+export interface DispatchOutcome {
+  state: 'completed' | 'error' | 'cancelled';
+  text: string;
+  errorMessage: string;
+}
+
+export interface DispatchOutcomeOptions {
+  withText?: boolean;
+}
+
+export interface DispatchSessionScope {
+  sessionId: string;
+  rootSessionId: string;
+  projectId: string;
+  workspaceId: string;
+  cwd: string;
+}
+
+export interface DispatchSessionService {
+  open: (sessionId: string) => Promise<{
+    session?: { sessionId: string; runtimeStatus: SessionRuntimeStatus | string; title?: string | null | undefined } | null;
+  }>;
+  list: (workspaceId?: string) => Promise<{
+    items: Array<{ sessionId: string; rootSessionId: string; runtimeStatus: SessionRuntimeStatus | string }>;
+    errors?: Record<string, string>;
+  }>;
+  history: (sessionId: string, query?: string) => Promise<DispatchHistoryPage | null>;
+  send: (sessionId: string, request: PromptRequest, commandId?: string) => Promise<{ run: Run } | { ok: boolean } | void>;
+}
+
+export interface DispatchResultsDependencies {
+  sessionService: DispatchSessionService;
+  resolveSessionScope: (sessionId: string) => Promise<DispatchSessionScope | null>;
+  dataDir: string;
+  isSessionArchived?: (sessionId: string) => boolean | Promise<boolean>;
+  now?: () => number;
+  quietMs?: number;
+  retryDelayMs?: (failures: number) => number;
+  subagentRecheckMs?: number;
+  settleRecheckMs?: number;
+}
+
+export interface RegisterDispatchInput {
+  parentSessionId: string;
+  sessionId: string;
+  dispatchedAt: number;
+  afterIdleId?: string | null | undefined;
+}
+
+export interface DispatchResultMessageInput {
+  sessionId: string;
+  title?: string;
+  outcome: DispatchOutcome;
+}
+
+export interface DispatchResultMessage {
+  text: string;
+  description: string;
+  metadata: {
+    source: typeof DISPATCH_RESULT_SOURCE;
+    sessionID: string;
+    state: DispatchOutcome['state'];
+    title?: string;
+  };
+}
+
+export interface DispatchResultsRuntime {
+  load: () => Promise<void>;
+  register: (input: RegisterDispatchInput) => Promise<{ id: string }>;
+  processCanonicalEvent: (event: CanonicalEvent, scope?: DispatchSessionScope | null) => void;
+  start: () => void;
+  stop: () => void;
+  pending: () => DispatchEntry[];
+  flush: () => Promise<void>;
+}
+
+const isTextPart = (part: DispatchMessagePart): part is { type: 'text'; content: string } =>
+  part.type === 'text' && typeof part.content === 'string';
+
+const messageText = (message: DispatchMessage): string => (Array.isArray(message.parts) ? message.parts : [])
+  .filter(isTextPart)
   .map((part) => part.content)
   .join('')
   .trim();
@@ -87,28 +193,39 @@ const OUTCOME_STATES = {
   stopped: 'cancelled',
   completed: 'completed',
   cancelled: 'cancelled',
-};
+} as const satisfies Record<string, DispatchOutcome['state']>;
 
-export const readDispatchOutcome = (pageOrRecords, dispatchedAt, afterTurnOrIdleId, { withText = false } = {}) => {
+const isTerminalStatus = (status: string): status is 'completed' | 'failed' | 'cancelled' =>
+  status === 'completed' || status === 'failed' || status === 'cancelled';
+
+export const readDispatchOutcome = (
+  pageOrRecords: DispatchHistoryPage | DispatchLegacyRecord[] | null | undefined,
+  dispatchedAt: number,
+  afterTurnOrIdleId?: string | null,
+  { withText = false }: DispatchOutcomeOptions = {},
+): DispatchOutcome | null => {
   if (Array.isArray(pageOrRecords)) {
     const records = pageOrRecords;
     const idleIndex = records.findIndex((record) => record?.type === 'idle');
     if (idleIndex === -1) return null;
     const idle = records[idleIndex];
-    if (!idle || !idle.time) return null;
+    if (!idle?.time || idle.time.created === undefined) return null;
     const byOrder = afterTurnOrIdleId !== undefined;
     if (byOrder ? idle.id === afterTurnOrIdleId : idle.time.created < dispatchedAt) return null;
     const baselineIndex = byOrder && afterTurnOrIdleId !== null
       ? records.findIndex((record) => record?.id === afterTurnOrIdleId)
       : -1;
     const turnRecords = records.slice(idleIndex + 1, baselineIndex === -1 ? undefined : baselineIndex);
-    const replies = turnRecords
-      .filter((record) => record?.type === 'assistant' && (byOrder || record.time?.created >= dispatchedAt));
+    const replies = turnRecords.filter(
+      (record) => record?.type === 'assistant' && (byOrder || (record.time?.created ?? -Infinity) >= dispatchedAt),
+    );
     const reply = replies[0];
-    const assistantText = (a) => (Array.isArray(a?.content) ? a.content.map((c) => c?.text || '').join('') : '');
-    const textReply = withText ? replies.find((a) => assistantText(a)) : reply;
+    const assistantText = (record: DispatchLegacyRecord): string =>
+      Array.isArray(record.content) ? record.content.map((part) => part?.text || '').join('') : '';
+    const textReply = withText ? replies.find((candidate) => assistantText(candidate)) : reply;
+    const mappedState: DispatchOutcome['state'] = idle.outcome ? OUTCOME_STATES[idle.outcome] : 'cancelled';
     return {
-      state: OUTCOME_STATES[idle.outcome] ?? idle.outcome,
+      state: mappedState,
       text: textReply ? assistantText(textReply) : '',
       errorMessage: reply?.error?.message?.trim() ?? '',
     };
@@ -116,31 +233,29 @@ export const readDispatchOutcome = (pageOrRecords, dispatchedAt, afterTurnOrIdle
   if (!pageOrRecords || !Array.isArray(pageOrRecords.turns) || !Array.isArray(pageOrRecords.messages)) return null;
   let candidateTurns = pageOrRecords.turns;
   if (afterTurnOrIdleId) {
-    const baselineIndex = candidateTurns.findIndex((t) => t.turnId === afterTurnOrIdleId);
+    const baselineIndex = candidateTurns.findIndex((candidate) => candidate.turnId === afterTurnOrIdleId);
     if (baselineIndex !== -1) {
       candidateTurns = candidateTurns.slice(baselineIndex + 1);
     }
   }
   const matchingTurns = candidateTurns.filter((candidate) => {
-    if (candidate.status !== 'completed' && candidate.status !== 'failed' && candidate.status !== 'cancelled') {
-      return false;
-    }
+    if (!isTerminalStatus(candidate.status)) return false;
     if (afterTurnOrIdleId !== undefined && candidate.turnId === afterTurnOrIdleId) return false;
     return Number(candidate.finishedAt) >= dispatchedAt;
   });
-  if (matchingTurns.length === 0) return null;
   const terminalTurn = matchingTurns.at(-1);
-  const turnIds = new Set(matchingTurns.map((t) => t.turnId));
+  if (!terminalTurn || !isTerminalStatus(terminalTurn.status)) return null;
+  const turnIds = new Set(matchingTurns.map((candidate) => candidate.turnId));
   const replies = pageOrRecords.messages.filter((message) => turnIds.has(message.turnId) && message.role === 'assistant');
   const text = [...replies].reverse().map((message) => messageText(message)).find((content) => content.length > 0) ?? '';
   return {
     state: OUTCOME_STATES[terminalTurn.status],
     text,
-    errorMessage: typeof terminalTurn.error === 'string' ? terminalTurn.error.trim() : '',
+    errorMessage: isString(terminalTurn.error) ? terminalTurn.error.trim() : '',
   };
 };
-export type DispatchOutcome = NonNullable<ReturnType<typeof readDispatchOutcome>>;
-const outcomeBody = ({ state, text, errorMessage }, sessionId) => {
+
+const outcomeBody = ({ state, text, errorMessage }: DispatchOutcome, sessionId: string): string => {
   const answer = text.length > ANSWER_CHAR_LIMIT
     ? `${text.slice(0, ANSWER_CHAR_LIMIT)}\n\n[Cut at ${ANSWER_CHAR_LIMIT} characters; read the rest with session.messages for ${sessionId}.]`
     : text;
@@ -153,11 +268,10 @@ const outcomeBody = ({ state, text, errorMessage }, sessionId) => {
   return answer ? `${stopped}\n\nIts last reply:\n${answer}` : stopped;
 };
 
-/** The synthetic message that carries a dispatched session's result to its parent. */
-export const buildDispatchResultMessage = ({ sessionId, title, outcome }) => {
+export const buildDispatchResultMessage = ({ sessionId, title, outcome }: DispatchResultMessageInput): DispatchResultMessage => {
   const label = title || 'Dispatched session';
   const attributes = `sessionID="${escapeAttribute(sessionId)}" state="${outcome.state}" title="${escapeAttribute(label)}"`;
-  const metadata = { source: DISPATCH_RESULT_SOURCE, sessionID: sessionId, state: outcome.state };
+  const metadata: DispatchResultMessage['metadata'] = { source: DISPATCH_RESULT_SOURCE, sessionID: sessionId, state: outcome.state };
   if (title) metadata.title = title;
   return {
     text: `<openchamber-session ${attributes}>\n${outcomeBody(outcome, sessionId)}\n</openchamber-session>`,
@@ -166,7 +280,18 @@ export const buildDispatchResultMessage = ({ sessionId, title, outcome }) => {
   };
 };
 
-const DELETED_OUTCOME = { state: 'cancelled', text: '', errorMessage: '' };
+const DELETED_OUTCOME: DispatchOutcome = { state: 'cancelled', text: '', errorMessage: '' };
+
+type WatchedSessionState =
+  | { kind: 'deleted' }
+  | { kind: 'running' }
+  | { kind: 'subagents' }
+  | { kind: 'ended'; title: string; page: DispatchHistoryPage };
+
+interface ReadyDelivery {
+  entry: DispatchEntry;
+  outcome: DispatchOutcome;
+}
 
 export function createDispatchResultsRuntime({
   sessionService,
@@ -178,64 +303,56 @@ export function createDispatchResultsRuntime({
   retryDelayMs = retryDelay,
   subagentRecheckMs = SUBAGENT_RECHECK_MS,
   settleRecheckMs = SETTLE_RECHECK_MS,
-}) {
-  if (!sessionService || typeof sessionService.open !== 'function' || typeof sessionService.history !== 'function' || typeof sessionService.list !== 'function' || typeof sessionService.send !== 'function') {
-    throw new Error('dispatch-results requires the canonical session service');
-  }
-  if (typeof resolveSessionScope !== 'function') throw new Error('dispatch-results requires a session scope resolver');
-  if (typeof dataDir !== 'string' || !dataDir) throw new Error('dispatch-results requires a data directory');
+}: DispatchResultsDependencies): DispatchResultsRuntime {
+  if (!dataDir) throw new Error('dispatch-results requires a data directory');
   const filePath = path.join(dataDir, FILE_NAME);
 
-  /** entry id → { id, parentSessionId, sessionId, dispatchedAt, messageId? } */
-  const entries = new Map();
-  let loadPromise = null;
-  let writePromise = Promise.resolve();
+  const entries = new Map<string, DispatchEntry>();
+  let loadPromise: Promise<void> | null = null;
+  let writePromise: Promise<void> = Promise.resolve();
   let stopped = false;
 
-  // In memory only: a restart starts every watched session from a fresh tick.
-  const timers = new Map(); // watched sessionId → timeout
-  const failures = new Map(); // watched sessionId → consecutive failed ticks
-  const settleChecks = new Map(); // watched sessionId → rechecks spent waiting for the idle record
-  const ticking = new Set(); // watched sessionIds with a tick in flight
+  const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  const failures = new Map<string, number>();
+  const settleChecks = new Map<string, number>();
+  const ticking = new Set<string>();
 
-  // --- persistence ---------------------------------------------------------
-
-  const readFile = async () => {
-    let raw;
+  const readFile = async (): Promise<DispatchEntry[]> => {
+    let raw: string;
     try {
       raw = await fs.promises.readFile(filePath, 'utf8');
     } catch (error) {
       if (parse(errorCodeSchema, error)?.code === 'ENOENT') return [];
       throw error;
     }
-    let stored = null;
+    let stored: z.output<typeof storedFileSchema> | null = null;
     let reason = 'not a dispatch results file';
     try {
       stored = parse(storedFileSchema, JSON.parse(raw));
     } catch (error) {
-      reason = error?.message ?? String(error);
+      reason = errorMessageOf(error);
     }
     if (!stored) {
-      // Malformed is a failure, not "nothing pending": keep the bytes and
-      // start over rather than overwrite them on the next write.
       const backup = `${filePath}.corrupt-${now()}`;
       await fs.promises.rename(filePath, backup).catch(() => undefined);
       console.warn(`[dispatch-results] file was unreadable and moved to ${backup}: ${reason}`);
       return [];
     }
-    // One unreadable entry is dropped alone; the rest still deliver.
-    return stored.entries.map((entry) => parse(entrySchema, entry)).filter(Boolean);
+    const restored: DispatchEntry[] = [];
+    for (const item of stored.entries) {
+      const parsed = parse(entrySchema, item);
+      if (parsed) restored.push(parsed);
+    }
+    return restored;
   };
 
-  const load = () => {
+  const load = (): Promise<void> => {
     if (!loadPromise) {
       loadPromise = readFile()
         .then((stored) => {
           for (const entry of stored) if (!entries.has(entry.id)) entries.set(entry.id, entry);
         })
         .catch((error) => {
-          // A failed read must not pass for "nothing pending": the next write
-          // would clobber the file, so writes wait for a load that succeeds.
           loadPromise = null;
           throw error;
         });
@@ -243,7 +360,7 @@ export function createDispatchResultsRuntime({
     return loadPromise;
   };
 
-  const persist = () => {
+  const persist = (): Promise<void> => {
     const payload = JSON.stringify({ version: FILE_VERSION, entries: Array.from(entries.values()) });
     const write = writePromise.then(async () => {
       await fs.promises.mkdir(dataDir, { recursive: true });
@@ -251,39 +368,37 @@ export function createDispatchResultsRuntime({
       await fs.promises.writeFile(tmpPath, payload, { encoding: 'utf8', mode: 0o600 });
       await fs.promises.rename(tmpPath, filePath);
     });
-    // The chain survives a failed write so later writes still run; the caller
-    // still sees this one fail, since "on disk" is what it waits for.
     writePromise = write.catch((error) => {
-      console.warn('[dispatch-results] failed to persist pending results:', error?.message ?? error);
+      console.warn('[dispatch-results] failed to persist pending results:', errorMessageOf(error));
     });
     return write;
   };
 
-  // --- OpenCode access -----------------------------------------------------
-
-  // --- canonical session access -------------------------------------------
-  const readWatchedSession = async (sessionId) => {
-    if (typeof sessionService?.open !== 'function' || typeof sessionService?.history !== 'function' || typeof resolveSessionScope !== 'function') return null;
+  const readWatchedSession = async (sessionId: string): Promise<WatchedSessionState | null> => {
     try {
       const scope = await resolveSessionScope(sessionId);
       if (!scope) return { kind: 'deleted' };
       const snapshot = await sessionService.open(sessionId);
       const session = snapshot?.session;
       if (!session) return { kind: 'deleted' };
-      if (session.runtimeStatus === 'running' || session.runtimeStatus === 'awaiting_approval' || session.runtimeStatus === 'awaiting_input') return { kind: 'running' };
+      if (session.runtimeStatus === 'running' || session.runtimeStatus === 'awaiting_approval' || session.runtimeStatus === 'awaiting_input') {
+        return { kind: 'running' };
+      }
       const listed = await sessionService.list(scope.workspaceId);
       if (!listed || !Array.isArray(listed.items) || Object.keys(listed.errors ?? {}).length > 0) return null;
-      if (listed.items.some((item) => item.rootSessionId === sessionId && item.sessionId !== sessionId && ['running', 'awaiting_approval', 'awaiting_input'].includes(item.runtimeStatus))) return { kind: 'subagents' };
+      if (listed.items.some((item) => item.rootSessionId === sessionId && item.sessionId !== sessionId && ['running', 'awaiting_approval', 'awaiting_input'].includes(item.runtimeStatus))) {
+        return { kind: 'subagents' };
+      }
       const page = await sessionService.history(sessionId, new URLSearchParams({ limit: String(MESSAGE_PAGE_LIMIT) }).toString());
       if (!page || !Array.isArray(page.turns) || !Array.isArray(page.messages)) return null;
-      return { kind: 'ended', title: typeof session.title === 'string' ? session.title.trim() : '', page };
+      return { kind: 'ended', title: isString(session.title) ? session.title.trim() : '', page };
     } catch (error) {
-      if (error?.status === 404 || error?.statusCode === 404) return { kind: 'deleted' };
+      if (isNotFound(error)) return { kind: 'deleted' };
       return null;
     }
   };
 
-  const deliver = async (entry, message) => {
+  const deliver = async (entry: DispatchEntry, message: DispatchResultMessage): Promise<boolean> => {
     const archived = await isSessionArchived(entry.parentSessionId);
     if (archived === true) return true;
     try {
@@ -296,7 +411,7 @@ export function createDispatchResultsRuntime({
       }, entry.messageId);
       return true;
     } catch (error) {
-      if (error?.status === 404 || error?.statusCode === 404) {
+      if (isNotFound(error)) {
         console.log(`[dispatch-results] dropping the result of ${entry.sessionId}: session ${entry.parentSessionId} no longer exists`);
         return true;
       }
@@ -304,11 +419,10 @@ export function createDispatchResultsRuntime({
     }
   };
 
-  // --- delivery loop -------------------------------------------------------
+  const pendingFor = (sessionId: string): DispatchEntry[] =>
+    Array.from(entries.values()).filter((entry) => entry.sessionId === sessionId);
 
-  const pendingFor = (sessionId) => Array.from(entries.values()).filter((entry) => entry.sessionId === sessionId);
-
-  const clearTimer = (sessionId) => {
+  const clearTimer = (sessionId: string): void => {
     const existing = timers.get(sessionId);
     if (existing) {
       clearTimeout(existing);
@@ -316,40 +430,37 @@ export function createDispatchResultsRuntime({
     }
   };
 
-  const arm = (sessionId, delayMs = quietMs) => {
+  const arm = (sessionId: string, delayMs = quietMs): void => {
     if (stopped || pendingFor(sessionId).length === 0) return;
     clearTimer(sessionId);
     const timer = setTimeout(() => {
       timers.delete(sessionId);
       tick(sessionId).catch((error) => {
-        console.warn('[dispatch-results] tick failed:', error?.message ?? error);
+        console.warn('[dispatch-results] tick failed:', errorMessageOf(error));
       });
     }, Math.max(0, delayMs));
     timer.unref?.();
     timers.set(sessionId, timer);
   };
 
-  const retryLater = (sessionId) => {
+  const retryLater = (sessionId: string): void => {
     const count = (failures.get(sessionId) ?? 0) + 1;
     failures.set(sessionId, count);
     arm(sessionId, retryDelayMs(count));
   };
 
-  async function tick(sessionId) {
+  async function tick(sessionId: string): Promise<void> {
     if (stopped || pendingFor(sessionId).length === 0) return;
-    // An idle event that lands while a tick is still reading must not be
-    // lost: that tick may have seen the session running a moment earlier.
     if (ticking.has(sessionId)) return arm(sessionId);
     ticking.add(sessionId);
     try {
       const watched = await readWatchedSession(sessionId);
       if (watched === null) return retryLater(sessionId);
-      // Running: its next idle event re-arms the tick.
       if (watched.kind === 'running') return;
       if (watched.kind === 'subagents') return arm(sessionId, subagentRecheckMs);
 
       let waiting = false;
-      const ready = [];
+      const ready: ReadyDelivery[] = [];
       for (const entry of pendingFor(sessionId)) {
         const outcome = watched.kind === 'deleted'
           ? DELETED_OUTCOME
@@ -363,7 +474,7 @@ export function createDispatchResultsRuntime({
 
       const unsent = ready.filter(({ entry }) => !entry.messageId);
       if (unsent.length > 0) {
-        const minted = new Map();
+        const minted = new Map<string, string>();
         for (const { entry } of unsent) {
           let messageId = minted.get(entry.parentSessionId);
           if (messageId === undefined) {
@@ -380,12 +491,16 @@ export function createDispatchResultsRuntime({
         }
       }
 
-      const deliveries = new Map(); // message id → ready entries
-      for (const item of ready) deliveries.set(item.entry.messageId, [...(deliveries.get(item.entry.messageId) ?? []), item]);
+      const deliveries = new Map<string, ReadyDelivery[]>();
+      for (const item of ready) {
+        const messageId = item.entry.messageId;
+        if (!messageId) continue;
+        deliveries.set(messageId, [...(deliveries.get(messageId) ?? []), item]);
+      }
       for (const group of deliveries.values()) {
-        // An entry without a baseline compares clocks and can miss a reply
-        // that began before its send; another entry of the run may have it.
-        const { entry, outcome } = group.find((item) => item.outcome.text) ?? group[0];
+        const first = group[0];
+        if (!first) continue;
+        const { entry, outcome } = group.find((item) => item.outcome.text) ?? first;
         const message = buildDispatchResultMessage({
           sessionId,
           title: watched.kind === 'ended' ? watched.title : '',
@@ -402,36 +517,26 @@ export function createDispatchResultsRuntime({
         settleChecks.delete(sessionId);
         return;
       }
-      // Idle, yet the run's idle record is not there: either the record trails
-      // the event briefly, or the dispatched prompt has not started. A few
-      // short rechecks cover the first; the next idle event covers the second.
       const spent = settleChecks.get(sessionId) ?? 0;
       if (spent < SETTLE_RECHECKS) {
         settleChecks.set(sessionId, spent + 1);
         arm(sessionId, settleRecheckMs);
       }
     } catch (error) {
-      console.warn(`[dispatch-results] delivering the result of ${sessionId} failed:`, error?.message ?? error);
+      console.warn(`[dispatch-results] delivering the result of ${sessionId} failed:`, errorMessageOf(error));
       retryLater(sessionId);
     } finally {
       ticking.delete(sessionId);
     }
   }
 
-  const reconcileAll = () => {
+  const reconcileAll = (): void => {
     for (const sessionId of new Set(Array.from(entries.values(), (entry) => entry.sessionId))) {
       if (!timers.has(sessionId)) arm(sessionId);
     }
   };
 
-  // --- public --------------------------------------------------------------
-
-  /**
-   * Watches `sessionId` for the end of the turn dispatched at `dispatchedAt`
-   * and delivers its result to `parentSessionId`. Resolves once the entry is
-   * on disk, so a restart right after the tool answers still delivers.
-   */
-  const register = async ({ parentSessionId, sessionId, dispatchedAt, afterIdleId }) => {
+  const register = async ({ parentSessionId, sessionId, dispatchedAt, afterIdleId }: RegisterDispatchInput): Promise<{ id: string }> => {
     const parent = parse(sessionIdSchema, parentSessionId);
     const watched = parse(sessionIdSchema, sessionId);
     if (!parent || !watched) throw new TypeError('parentSessionId and sessionId must be session ids');
@@ -439,8 +544,12 @@ export function createDispatchResultsRuntime({
     const at = parse(timeSchema, dispatchedAt);
     if (at === null) throw new TypeError('dispatchedAt must be a timestamp');
     await load();
-    const entry = { id: `dispatch-${now()}-${Math.random().toString(36).slice(2, 9)}`, parentSessionId: parent, sessionId: watched, dispatchedAt: at };
-    // Kept only when it is a real baseline (an id, or null for "none yet").
+    const entry: DispatchEntry = {
+      id: `dispatch-${now()}-${Math.random().toString(36).slice(2, 9)}`,
+      parentSessionId: parent,
+      sessionId: watched,
+      dispatchedAt: at,
+    };
     const baseline = afterIdleSchema.safeParse(afterIdleId);
     if (afterIdleId !== undefined && baseline.success) entry.afterIdleId = baseline.data;
     entries.set(entry.id, entry);
@@ -457,19 +566,15 @@ export function createDispatchResultsRuntime({
     try {
       await persist();
     } catch (error) {
-      // The caller tells the agent no result is coming; delivering one anyway
-      // would contradict it.
       entries.delete(entry.id);
       throw error;
     }
-    // The session may already be done: a short turn can end before this
-    // entry existed, and its idle event would then have found nothing to arm.
     arm(watched);
     return { id: entry.id };
   };
 
-  const processCanonicalEvent = (event, scope) => {
-    if (stopped || !event || typeof event.sessionId !== 'string') return;
+  const processCanonicalEvent = (event: CanonicalEvent, scope?: DispatchSessionScope | null): void => {
+    if (stopped || !event.sessionId) return;
     if (scope?.sessionId && scope.sessionId !== event.sessionId) return;
     const sessionId = event.sessionId;
     if (event.type === 'session.deleted') {
@@ -494,18 +599,18 @@ export function createDispatchResultsRuntime({
     }
   };
 
-  const start = () => {
+  const start = (): void => {
     void load()
       .then(() => {
         if (entries.size > 0) console.log(`[dispatch-results] restored ${entries.size} pending result(s)`);
         reconcileAll();
       })
       .catch((error) => {
-        console.warn('[dispatch-results] failed to load pending results:', error?.message ?? error);
+        console.warn('[dispatch-results] failed to load pending results:', errorMessageOf(error));
       });
   };
 
-  const stop = () => {
+  const stop = (): void => {
     stopped = true;
     for (const timer of timers.values()) clearTimeout(timer);
     timers.clear();
@@ -517,9 +622,7 @@ export function createDispatchResultsRuntime({
     processCanonicalEvent,
     start,
     stop,
-    /** Pending entries, oldest first; tests and diagnostics read it. */
     pending: () => Array.from(entries.values()).sort((left, right) => left.dispatchedAt - right.dispatchedAt),
-    /** Drains the pending write; tests and shutdown use it. */
     flush: () => writePromise,
   };
 }

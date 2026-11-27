@@ -10,15 +10,15 @@ renders a projection.
 
 ## Files
 
-- `sqlite-store.js` — durable queue state in the Host metadata database
+- `sqlite-store.ts` — durable queue state in the Host metadata database
   (`host-metadata.sqlite`), the serialized write transaction every mutation
   runs in, revision compare-and-set, delivery claims and the legacy
   `message-queue.json` conversion.
-- `canonical-runtime.js` — the delivery dispatch loop: reads the runtime
+- `canonical-runtime.ts` — the delivery dispatch loop: reads the runtime
   session, claims the head, resolves Host attachments, submits the captured
   prompt to the private Bun Agent Service, reconciles acknowledgements and
   publishes every mutation.
-- `prompt-admission.js` — root-session prompt admission invariants.
+- `prompt-admission.ts` — root-session prompt admission invariants.
 - `runtime.ts` — route registration for both families (below) plus the
   store/runtime construction exports.
 - `runtime.test.js` — delivery, idleness gates, retries, concurrency, take
@@ -29,12 +29,12 @@ renders a projection.
 Wiring: created in `server/runtime.ts`; product routes registered in
 `server-frame/feature-routes-runtime.ts` with JSON bodies enabled in
 `server-frame/core-routes.ts`; canonical routes mounted on the authenticated
-canonical gateway in `host/canonical-routes.js` through
+canonical gateway in `host/canonical-routes.ts` through
 `registerCanonicalQueueRoutes`.
 
 ## Canonical delivery owner
 
-`sqlite-store.js` persists captured `PromptRequest` records in the Node Host's
+`sqlite-store.ts` persists captured `PromptRequest` records in the Node Host's
 `host-metadata.sqlite`. Queue revisions are unsigned-64 decimal strings. Append
 commands retain their idempotent response for 24 hours; reorder, delete and
 take compare the authorized queue revision. Only the head can be claimed, and
@@ -42,7 +42,7 @@ a claim prevents another delivery or a conflicting mutation. Projections omit
 context payloads and retain Host attachment references, never SDK objects or
 provider credentials.
 
-`canonical-runtime.js` sends the captured request and Host-resolved files to
+`canonical-runtime.ts` sends the captured request and Host-resolved files to
 the private Bun service with the claim's run ID. Acceptance removes the queue
 item; the next item still waits for authoritative session idleness. Expired
 unsent claims can retry. A submitted claim is reconciled against live state or

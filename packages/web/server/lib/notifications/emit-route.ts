@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { NotificationPayload } from './contracts.js';
-import type { Application, ExpressFactory, Request, RequestHandler } from '../shared/http-contracts.js';
+import type { Application, ExpressFactory, NextFunction, Request, RequestHandler, Response } from '../shared/http-contracts.js';
 
 export const NOTIFICATION_EMIT_PATH = '/api/notifications/emit';
 const RATE_WINDOW_MS = 10_000;
@@ -17,7 +17,33 @@ const emitBodySchema = z.object({
   showWhenFocused: z.boolean().optional(),
 }).refine((value) => value.title || value.body, { message: 'title or body required' });
 
-export const createPluginNotificationEmitter = (dependencies) => {
+export interface PluginNotificationSettings {
+  nativeNotificationsEnabled?: boolean;
+  notificationMode?: string;
+}
+
+export interface PluginNotificationEmitterDependencies {
+  readSettingsFromDiskMigrated: () => Promise<PluginNotificationSettings>;
+  emitDesktopNotification: (payload: NotificationPayload) => boolean;
+  broadcastUiNotification: (payload: NotificationPayload, options: { desktopNotificationDelivered: boolean }) => void;
+  now?: () => number;
+}
+
+export type NotificationEmitResponse =
+  | { status: 400; retryAfter?: never; body: { error: string } }
+  | { status: 429; retryAfter: number; body: { error: string } }
+  | { status: 200; retryAfter?: never; body: { delivered: false; reason: 'notifications-disabled' } | { delivered: true } };
+
+export interface PluginNotificationEmitter {
+  emit: <Input>(input: Input) => Promise<NotificationEmitResponse>;
+}
+
+export interface NotificationEmitRouteDependencies {
+  express: Pick<ExpressFactory, 'json'>;
+  emitter: PluginNotificationEmitter;
+}
+
+export const createPluginNotificationEmitter = (dependencies: PluginNotificationEmitterDependencies): PluginNotificationEmitter => {
   const { readSettingsFromDiskMigrated, emitDesktopNotification, broadcastUiNotification, now = Date.now } = dependencies;
   let windowStartedAt = 0; let windowCount = 0;
   const takeRateSlot = () => {
@@ -27,14 +53,23 @@ export const createPluginNotificationEmitter = (dependencies) => {
     windowCount += 1; return 0;
   };
 
-  const emit = async <Input>(input: Input) => {
+  const emit = async <Input>(input: Input): Promise<NotificationEmitResponse> => {
     const parsed = emitBodySchema.safeParse(input);
     if (!parsed.success) return { status: 400, body: { error: parsed.error.issues[0]?.message ?? 'invalid notification' } };
     const retryAfter = takeRateSlot();
     if (retryAfter > 0) return { status: 429, retryAfter, body: { error: 'too many notifications' } };
     const settings = await readSettingsFromDiskMigrated();
     if (settings.nativeNotificationsEnabled === false) return { status: 200, body: { delivered: false, reason: 'notifications-disabled' } };
-    const payload = { title: parsed.data.title ?? 'OhPiChamber', body: parsed.data.body, tag: parsed.data.tag, kind: 'plugin', sessionId: parsed.data.sessionId, directory: parsed.data.directory, requireHidden: true, showWhenFocused: parsed.data.showWhenFocused === true || settings.notificationMode === 'always' };
+    const payload: NotificationPayload = {
+      title: parsed.data.title ?? 'OhPiChamber',
+      body: parsed.data.body,
+      tag: parsed.data.tag,
+      kind: 'plugin',
+      sessionId: parsed.data.sessionId,
+      directory: parsed.data.directory,
+      requireHidden: true,
+      showWhenFocused: parsed.data.showWhenFocused === true || settings.notificationMode === 'always',
+    };
     const desktopNotificationDelivered = emitDesktopNotification(payload) === true;
     broadcastUiNotification(payload, { desktopNotificationDelivered });
     return { status: 200, body: { delivered: true } };
@@ -42,15 +77,24 @@ export const createPluginNotificationEmitter = (dependencies) => {
   return { emit };
 };
 
-export const registerNotificationEmitRoutes = (app, dependencies) => {
+export const registerNotificationEmitRoutes = (
+  app: Pick<Application, 'post'>,
+  dependencies: NotificationEmitRouteDependencies,
+) => {
   const { express, emitter } = dependencies;
   const jsonBody = express.json({ limit: '16kb' });
-  const respond = async (req, res, next) => {
-    try { const result = await emitter.emit(req.body); if (result.retryAfter) res.setHeader('Retry-After', String(result.retryAfter)); return res.status(result.status).json(result.body); }
+  const respond = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await emitter.emit(req.body);
+      if (result.retryAfter) res.setHeader('Retry-After', String(result.retryAfter));
+      return res.status(result.status).json(result.body);
+    }
     catch (error) { return next(error); }
   };
-  return { registerApiRoute: (apiAuth) => {
-    if (!apiAuth) throw new TypeError('registerApiRoute needs the API auth middleware');
-    app.post(NOTIFICATION_EMIT_PATH, jsonBody, apiAuth, respond);
-  } };
+  return {
+    registerApiRoute: (apiAuth: RequestHandler) => {
+      if (!apiAuth) throw new TypeError('registerApiRoute needs the API auth middleware');
+      app.post(NOTIFICATION_EMIT_PATH, jsonBody, apiAuth, respond);
+    },
+  };
 };

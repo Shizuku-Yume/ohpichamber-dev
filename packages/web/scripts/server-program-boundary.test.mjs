@@ -38,7 +38,7 @@ function fixture() {
   fs.writeFileSync(path.join(web, 'build/previous-build.txt'), 'keep the last build');
   fs.writeFileSync(path.join(root, 'packages/ui/src/types.ts'), 'export interface Binding { id: string }');
   fs.symlinkSync(compilerPackage, path.join(web, 'node_modules/typescript'), 'junction');
-  for (const name of ['server-program-boundary.mjs', 'check-server-types.mjs', 'fork-owned-server-javascript.mjs', 'fork-owned-server-untyped.json', 'server-check-scope.mjs', 'server-runtime-closure.mjs', 'build-server.mjs']) {
+  for (const name of ['server-program-boundary.mjs', 'check-server-types.mjs', 'server-runtime-closure.mjs', 'build-server.mjs']) {
     fs.copyFileSync(path.join(scripts, name), path.join(web, 'scripts', name));
   }
   return { root, web };

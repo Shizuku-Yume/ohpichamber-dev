@@ -16,7 +16,7 @@
 - `packages/web/src/api/index.ts`: composes web `RuntimeAPIs`.
 - `packages/web/server/lib/host/core-routes.js`: installs OpenChamber route families.
 - `packages/web/server/lib/host/feature-routes-runtime.js`: explicit feature route registration.
-- `packages/web/server/lib/host/settings-routes.js`: Host-owned `GET`/`PUT /api/config/settings` registration, composed from `packages/web/server/index.js` before feature routes.
+- `packages/web/server/lib/host/settings-routes.ts`: Host-owned `GET`/`PUT /api/config/settings` registration, composed from `packages/web/server/index.js` before feature routes.
 - `packages/web/server/lib/opencode/`: historical notes only. The unmounted `proxy.js` fixture was deleted with the in-space runtime (Task38); no OpenCode proxy remains.
 - `packages/web/server/lib/ui-auth/ui-auth.js`: session and URL-token route gates.
 

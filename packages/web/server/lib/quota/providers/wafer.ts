@@ -1,14 +1,15 @@
+import { z } from 'zod';
 import { credentialAccessToken } from './selected-credential.js';
+import type { CredentialJson } from '../credentials/contracts.js';
+import type { ProviderUsage, QuotaResult, UsageWindow } from '../utils/contracts.js';
 import {
   buildResult,
   toUsageWindow,
   toNumber,
   toTimestamp,
   resolveWindowLabel,
-  asNonEmptyString
+  asNonEmptyString,
 } from '../utils/index.js';
-import { z } from "zod";
-
 
 interface WaferFields {
   key?: unknown;
@@ -32,9 +33,9 @@ export const providerName = 'Wafer.ai';
 const WAFER_QUOTA_URL = 'https://pass.wafer.ai/v1/inference/quota';
 const WAFER_WINDOW_SECONDS = 5 * 3600;
 
-export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
+export const isConfigured = (credential?: CredentialJson): boolean => Boolean(credentialAccessToken(credential));
 
-export const fetchQuota = async ({ credential } = {}) => {
+export const fetchQuota = async ({ credential }: { credential?: CredentialJson } = {}): Promise<QuotaResult<string, string, ProviderUsage>> => {
   const apiKey = credentialAccessToken(credential);
   if (!apiKey) {
     return buildResult({
@@ -97,9 +98,9 @@ export const fetchQuota = async ({ credential } = {}) => {
       : WAFER_WINDOW_SECONDS;
     const windowLabel = resolveWindowLabel(windowSeconds);
 
-    let valueLabel = null;
+    let valueLabel: string | null = null;
     if (remaining !== null && limit !== null) {
-      const parts = [];
+      const parts: string[] = [];
       if (planTier) parts.push(planTier);
       parts.push(`${remaining} / ${limit} left`);
       if (hasOverage) parts.push(`+${overage} overage`);

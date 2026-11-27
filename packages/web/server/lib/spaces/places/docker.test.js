@@ -5,6 +5,7 @@ import { GATEKEEPER_PROGRAM } from '../gatekeeper-channel.js';
 import { buildSpaceLabels, buildToolsLabels, hashProjectDirectory } from '../labels.js';
 import { SPACE_CONNECT_COMMAND, SPACE_ENVIRONMENT, SPACE_IDLE_EXIT_CODE, SPACE_SERVER_COMMAND } from '../layout.js';
 import { createRegistryToolsSource, toolsContentKey } from '../tools.js';
+import { createDockerEngine } from './docker-engine.js';
 import { SPACE_BASE_IMAGE, createDockerPlace } from './docker.js';
 import { bridgeNetworkEntry, createFakeDocker, hardenedContainerEntry, internalNetworkEntry } from './fake-docker.js';
 
@@ -1662,5 +1663,24 @@ describe('docker place: new tools at the next start', () => {
       expect(result.failed).toEqual([]);
       expect(fake.names().filter((name) => name.startsWith('container:'))).toEqual([]);
     });
+  });
+});
+
+describe('docker engine inspect parsing', () => {
+  const engineOn = (stdout) => createDockerEngine({
+    dockerPath: 'docker',
+    runCommand: async () => ({ code: 0, stdout, stderr: '' }),
+  });
+
+  it('keeps the network attachment DNSNames that the gatekeeper alias verification reads', async () => {
+    const entry = await engineOn(JSON.stringify([{
+      Id: 'abc', Name: '/gatekeeper',
+      NetworkSettings: { Networks: { inner: { IPAddress: '172.19.0.2', DNSNames: ['gatekeeper', 'abc123'] } } },
+    }])).inspect('container', 'gatekeeper');
+    expect(entry?.NetworkSettings?.Networks?.inner?.DNSNames).toEqual(['gatekeeper', 'abc123']);
+  });
+
+  it('answers no entry for inspect output that is a valid JSON object instead of a list', async () => {
+    expect(await engineOn(JSON.stringify({ Id: 'abc' })).inspect('container', 'gatekeeper')).toBeNull();
   });
 });

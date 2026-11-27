@@ -1,12 +1,13 @@
+import { z } from 'zod';
 import { credentialAccessToken } from './selected-credential.js';
+import type { CredentialJson } from '../credentials/contracts.js';
+import type { ProviderUsage, QuotaResult } from '../utils/contracts.js';
 import {
   buildResult,
   toUsageWindow,
   toNumber,
-  formatMoney
+  formatMoney,
 } from '../utils/index.js';
-import { z } from "zod";
-
 
 interface DeepSeekFields {
   key?: unknown;
@@ -26,9 +27,9 @@ export const providerName = 'DeepSeek';
 
 const DEEPSEEK_QUOTA_URL = 'https://api.deepseek.com/user/balance';
 
-export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
+export const isConfigured = (credential?: CredentialJson): boolean => Boolean(credentialAccessToken(credential));
 
-export const fetchQuota = async ({ credential } = {}) => {
+export const fetchQuota = async ({ credential }: { credential?: CredentialJson } = {}): Promise<QuotaResult<string, string, ProviderUsage>> => {
   const apiKey = credentialAccessToken(credential);
 
   if (!apiKey) {

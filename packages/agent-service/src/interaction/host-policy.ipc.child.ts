@@ -1,7 +1,5 @@
 import { HostApprovalPolicies } from './host-policy.ts';
 
-// Real IPC client half: the Host answers like `agent-service-supervisor.js`
-// does, and this child uses the production `HostApprovalPolicies` client.
 const policies = new HostApprovalPolicies();
 
 const run = async (): Promise<void> => {

@@ -6,7 +6,7 @@ import type { LinkedIssuesPatch } from './session-linked-issues.js';
 import type { JsonValue } from '../shared/json-values.js';
 import type { SessionMetadata } from './session-metadata-store.js';
 
-export interface LinkEntry {
+export type LinkEntry = {
   id: string;
   title: string;
   url: string;
@@ -16,7 +16,7 @@ export interface LinkEntry {
   provider?: string;
   identifier?: string;
   thread?: 'change' | 'issue';
-}
+};
 
 type LinkEntryResult = { entry: LinkEntry; error?: never } | { error: string; entry?: never };
 type MatchTrackerUrl = (url: string) => { provider: string; identifier: string } | null;
@@ -86,47 +86,53 @@ export const buildLinkEntry = (input: LinkRequest['link'], linkedAt: number, { m
   if (thread?.provider === NATIVE_THREAD.provider && host === NATIVE_THREAD.host && thread.match[3] !== 'discussions') {
     const [, owner, repo, threadKind, rawNumber] = thread.match;
     const number = Number(rawNumber);
-    return { entry: {
-      id: `${owner}/${repo}#${number}`,
-      number,
-      title,
-      url: url.toString(),
-      kind: threadKind === 'pull' ? 'pull' : 'issue',
-      linkedAt,
-    } };
+    return {
+      entry: {
+        id: `${owner}/${repo}#${number}`,
+        number,
+        title,
+        url: url.toString(),
+        kind: threadKind === 'pull' ? 'pull' : 'issue',
+        linkedAt,
+      }
+    };
   }
 
   const tracked = matchTrackerUrl(url.toString());
   if (tracked) {
     const itemIdentifier = tracked.identifier.toUpperCase();
-    return { entry: {
-      id: `${tracked.provider}:${itemIdentifier}`,
-      kind: trackerEntryKind(tracked.provider),
-      provider: tracked.provider,
-      identifier: itemIdentifier,
-      title,
-      url: url.toString(),
-      linkedAt,
-    } };
+    return {
+      entry: {
+        id: `${tracked.provider}:${itemIdentifier}`,
+        kind: trackerEntryKind(tracked.provider),
+        provider: tracked.provider,
+        identifier: itemIdentifier,
+        title,
+        url: url.toString(),
+        linkedAt,
+      }
+    };
   }
 
   url.hash = '';
   const canonical = thread ? `${url.origin}${thread.match[0].replace(/\/$/, '')}` : null;
   const discussion = thread?.provider === NATIVE_THREAD.provider && thread.match[3] === 'discussions' ? `#${Number(thread.match[4])}` : null;
-  return { entry: {
-    id: `link:${canonical ?? url.toString()}`,
-    kind: 'external',
-    thread: discussion ? 'issue' : kind,
-    identifier: identifier || discussion || host,
-    title,
-    url: url.toString(),
-    linkedAt,
-  } };
+  return {
+    entry: {
+      id: `link:${canonical ?? url.toString()}`,
+      kind: 'external',
+      thread: discussion ? 'issue' : kind,
+      identifier: identifier || discussion || host,
+      title,
+      url: url.toString(),
+      linkedAt,
+    }
+  };
 };
 
-const linkedEntrySchema = z.looseObject({ id: z.string() });
+const linkedEntrySchema = z.object({ id: z.string() }).catchall(z.json());
 const linkMetadataSchema = z.looseObject({
-  openchamber: z.looseObject({ linked_issues: z.array(z.unknown()).catch([]) }).catch({ linked_issues: [] }),
+  openchamber: z.looseObject({ linked_issues: z.array(z.json()).catch([]) }).catch({ linked_issues: [] }),
 }).catch({ openchamber: { linked_issues: [] } });
 
 const SNAPSHOT_KEYS = ['number', 'identifier', 'title', 'url', 'kind', 'thread'] as const;

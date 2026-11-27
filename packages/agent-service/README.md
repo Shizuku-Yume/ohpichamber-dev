@@ -1,6 +1,6 @@
 # @openchamber/agent-service
 
-Private Bun Agent Service and dedicated OMP SDK worker processes. The Node Host uses `createAgentServiceSupervisor` in `packages/web/server/lib/host/agent-service-supervisor.js`; Electron keeps that Host in process. Hosted mobile and Capacitor connect to the Host and start no local worker. Guest clients do not receive access to these private routes.
+Private Bun Agent Service and dedicated OMP SDK worker processes. The Node Host uses `createAgentServiceSupervisor` in `packages/web/server/lib/host/agent-service-supervisor.ts`; Electron keeps that Host in process. Hosted mobile and Capacitor connect to the Host and start no local worker. Guest clients do not receive access to these private routes.
 
 Application execution is not activated by this package's presence. Task 22 composes the service into the Host; task 17 removes the inherited engine after replacement consumers are ready.
 

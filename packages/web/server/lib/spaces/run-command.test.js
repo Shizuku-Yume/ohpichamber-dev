@@ -218,7 +218,7 @@ describe('killProcessTree', () => {
 
   it('stops waiting for a taskkill that never ends', async () => {
     const { kill } = recorder();
-    const silent = () => ({ once: () => {} });
+    const silent = () => ({ once: () => { } });
     const started = Date.now();
     expect(await killProcessTree(fakeChild(4242), { platform: 'win32', kill, spawnProcess: silent, systemRoot: 'C:\\Windows', waitMs: 50 })).toBe(true);
     expect(Date.now() - started).toBeLessThan(2000);
@@ -258,7 +258,7 @@ const ready = setInterval(() => {
       const pidFile = path.join(directory, 'pids.json');
       const wrapperPath = path.join(directory, 'wrapper.mjs');
       fs.writeFileSync(wrapperPath, WRAPPER(new URL('./run-command.js', import.meta.url).href, parentOfSleeper(pidFile)));
-      const wrapper = spawn(node, [wrapperPath, pidFile, mode], { stdio: 'ignore' });
+      const wrapper = spawn(node, ['--import', new URL('../../../scripts/register-server-sources.mjs', import.meta.url).href, wrapperPath, pidFile, mode], { stdio: 'ignore' });
       const exited = new Promise((resolve) => { wrapper.on('exit', resolve); });
       if (mode === 'sigint') {
         expect(await waitFor(() => fs.existsSync(`${pidFile}.ready`))).toBe(true);
@@ -325,7 +325,7 @@ import { runCommand } from ${JSON.stringify(new URL('./run-command.js', import.m
 runCommand('git', ['-C', ${JSON.stringify(repo)}, 'apply', '--binary', ${JSON.stringify(patch)}], { env: ${JSON.stringify(env)}, killTree: true, keepAtExit: true, keepTail: true, maxOutputBytes: 65536, timeoutMs: 60000 }).catch(() => {});
 setTimeout(() => process.exit(0), 1000);
 `);
-      const host = spawn(node, [wrapper], { stdio: 'ignore' });
+      const host = spawn(node, ['--import', new URL('../../../scripts/register-server-sources.mjs', import.meta.url).href, wrapper], { stdio: 'ignore' });
       await new Promise((resolve) => { host.on('exit', resolve); });
       const holds = (name) => fs.existsSync(path.join(repo, name)) && fs.readFileSync(path.join(repo, name), 'utf8') === 'changed\n';
       // Four seconds of smudging in all, most of it after the host left.

@@ -1,15 +1,14 @@
+import { z } from 'zod';
 import { credentialAccessToken } from './selected-credential.js';
-import type { UsageWindow } from '../utils/contracts.js';
+import type { CredentialJson } from '../credentials/contracts.js';
+import type { ProviderUsage, QuotaResult, UsageWindow } from '../utils/contracts.js';
 import {
   buildResult,
   toUsageWindow,
   toNumber,
   asObject,
-  asNonEmptyString,
-  formatMoney
+  formatMoney,
 } from '../utils/index.js';
-import { z } from "zod";
-
 
 interface OpenRouterFields {
   key?: unknown;
@@ -36,7 +35,7 @@ const PERIOD_SECONDS = { daily: 86400, weekly: 604800, monthly: 30 * 86400 };
 const isPeriodKey = (key: string): key is keyof typeof PERIOD_SECONDS => Object.hasOwn(PERIOD_SECONDS, key);
 
 
-export const resolveResetAt = <Period>(limitReset: Period, nowMs: number) => {
+export const resolveResetAt = (limitReset: string, nowMs: number): number | null => {
   const now = new Date(nowMs);
   const y = now.getUTCFullYear();
   const m = now.getUTCMonth();
@@ -51,8 +50,7 @@ export const resolveResetAt = <Period>(limitReset: Period, nowMs: number) => {
   return null;
 };
 
-export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
-
+export const isConfigured = (credential?: CredentialJson): boolean => Boolean(credentialAccessToken(credential));
 const toAmount = z.unknown().transform((value) => (String(value).trim() === '' ? null : toNumber(value))).parse;
 const toSpendAmount = z.unknown().transform((value) => {
   const amount = toAmount(value);
@@ -65,7 +63,7 @@ const spendWindow = (spent: number | null) => toUsageWindow({
   value: { kind: 'spend', spent, limit: null }
 });
 
-export const fetchQuota = async ({ credential } = {}) => {
+export const fetchQuota = async ({ credential }: { credential?: CredentialJson } = {}): Promise<QuotaResult<string, string, ProviderUsage>> => {
   const apiKey = credentialAccessToken(credential);
 
   if (!apiKey) {

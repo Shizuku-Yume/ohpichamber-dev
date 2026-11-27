@@ -1,8 +1,8 @@
-
-import { credentialAccessToken } from './selected-credential.js';
 import { z } from 'zod';
+import { credentialAccessToken } from './selected-credential.js';
+import type { CredentialJson } from '../credentials/contracts.js';
+import type { ProviderUsage, QuotaResult, UsageWindow } from '../utils/contracts.js';
 import { asNonEmptyString, asObject, buildResult, formatMoney, toNumber, toTimestamp, toUsageWindow } from '../utils/index.js';
-
 interface OllamaFields {
   key?: unknown;
   token?: unknown;
@@ -28,25 +28,11 @@ export const providerName = 'Ollama Cloud';
 const BALANCE_URL = 'https://ollama.com/api/balance';
 const ME_URL = 'https://ollama.com/api/me';
 
-/**
- * The account's windows, read from an already-parsed `/api/balance` payload.
- *
- * `included` is one of two documented shapes. A credits plan reports the month's
- * pool: the used fraction is `(allowance_usd - balance_usd) / allowance_usd`,
- * clamped because a pool at or over its cap must read as 100 and never above,
- * with the reset at `period.until`. A legacy plan reports `session` and
- * `weekly` limits instead, each a `remaining_percent` with a `resets_at`; those
- * become their own windows. Whichever buckets are present are rendered, so a
- * plan on one shape keeps reporting while Ollama serves the other. A pool with
- * no positive allowance is skipped, not guessed at.
- *
- * `purchased.balance_usd` is pay-as-you-go credit bought on top of the plan. It
- * is a money balance, not a fraction of anything, so it is surfaced only while
- * positive; a zero or absent balance adds no row.
- */
+const timeoutErrorSchema = z.object({ name: z.literal('TimeoutError') });
+
 export const toUsageWindows = z.unknown().transform((payload) => {
-  const windows = {};
-  const included = asObject(asObject(payload)?.included);
+  const windows: Record<string, UsageWindow> = {};
+  const included = asFields(asFields(payload)?.included);
   const allowance = toNumber(included?.allowance_usd);
   const remaining = toNumber(included?.balance_usd);
   if (allowance !== null && allowance > 0 && remaining !== null) {
@@ -80,9 +66,9 @@ export const toUsageWindows = z.unknown().transform((payload) => {
   return windows;
 }).parse;
 
-export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
+export const isConfigured = (credential?: CredentialJson): boolean => Boolean(credentialAccessToken(credential));
 
-export const fetchOllamaCloudUsage = async (apiKey: string, fetchImpl = fetch) => {
+export const fetchOllamaCloudUsage = async (apiKey: string, fetchImpl: typeof fetch = fetch): Promise<Record<string, UsageWindow>> => {
   const response = await fetchImpl(BALANCE_URL, {
     method: 'GET',
     headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
@@ -98,7 +84,7 @@ export const fetchOllamaCloudUsage = async (apiKey: string, fetchImpl = fetch) =
   return windows;
 };
 
-export const fetchOllamaCloudPlan = async (apiKey: string, fetchImpl = fetch) => {
+export const fetchOllamaCloudPlan = async (apiKey: string, fetchImpl: typeof fetch = fetch): Promise<string | null> => {
   const response = await fetchImpl(ME_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
@@ -108,7 +94,7 @@ export const fetchOllamaCloudPlan = async (apiKey: string, fetchImpl = fetch) =>
   return asNonEmptyString(asFields(await response.json())?.Plan);
 };
 
-export const fetchQuota = async ({ credential } = {}) => {
+export const fetchQuota = async ({ credential }: { credential?: CredentialJson } = {}): Promise<QuotaResult<string, string, ProviderUsage>> => {
   const apiKey = credentialAccessToken(credential);
   if (!apiKey) {
     return buildResult({ providerId, providerName, ok: false, configured: false, error: 'Not configured' });
@@ -126,7 +112,7 @@ export const fetchQuota = async ({ credential } = {}) => {
       providerName,
       ok: false,
       configured: true,
-      error: error?.name === 'TimeoutError' ? 'Request timed out' : error instanceof SyntaxError ? 'Invalid response from provider' : 'Request failed',
+      error: timeoutErrorSchema.safeParse(error).success ? 'Request timed out' : error instanceof SyntaxError ? 'Invalid response from provider' : 'Request failed',
     });
   }
 };

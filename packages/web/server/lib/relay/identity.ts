@@ -30,15 +30,7 @@ export const createRelayIdentityRuntime = (deps: RelaySigningDependencies) => {
     return { privateJwk, publicJwk };
   });
 
-  /**
-   * @returns {Promise<{
-   *   serverId: string,
-   *   hostEncPubJwk: JsonWebKey,
-   *   hostEncPrivateKey: CryptoKey,
-   *   signRelayAuth: (role: string, connectionId?: string | null) => { ts: number, sig: string, pk: string },
-   * }>}
-   */
-  const buildIdentity = async () => {
+  const buildIdentity = async (): Promise<RelayIdentity> => {
     const signing = await getOrCreateRelaySigningKeypair({ crypto, relayKeyStore });
     const serverId = deriveServerId({ crypto }, signing.publicJwk);
     const encryption = await getOrCreateEncryptionKeypair();
@@ -59,10 +51,7 @@ export const createRelayIdentityRuntime = (deps: RelaySigningDependencies) => {
     };
   };
 
-  // A reset changes the key store generation after it rewrites the file, so a
-  // build that started before the reset can hold a mix of old and new keys.
-  // Compare the generation after building: a change means rebuild, never cache.
-  const getRelayIdentity = async () => {
+  const getRelayIdentity = async (): Promise<RelayIdentity> => {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const generation = relayKeyStore.generation();
       if (cachedIdentity && cachedGeneration === generation) return cachedIdentity;

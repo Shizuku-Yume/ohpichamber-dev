@@ -34,6 +34,15 @@ export interface PermissionAutoAcceptOptions {
   broadcastGlobalUiEvent?: ((event: PermissionUiEvent) => void) | undefined;
   evaluatePermission?: ((permission: RoutingPermission, directory: PermissionDirectory) => Promise<{ action: string } | null | undefined>) | null | undefined;
   onSessionPolicyChanged?: ((sessionId: string, mode: PermissionMode, directory: PermissionDirectory) => Promise<void> | void) | null | undefined;
-  resolveSessionParent?: ((sessionId: string) => Promise<string | null> | string | null) | undefined;
+  resolveSessionParent?: ((sessionId: string, directory?: PermissionDirectory) => Promise<string | null | undefined> | string | null | undefined) | undefined;
   resolveLegacyEnabledMode?: (() => Promise<PermissionMode>) | undefined;
+}
+
+export interface PermissionApprovalInput extends RoutingPermission {
+  approvalId?: string;
+}
+
+export interface PermissionEvaluationResult {
+  mode: PermissionMode;
+  action: 'accept' | 'hold';
 }

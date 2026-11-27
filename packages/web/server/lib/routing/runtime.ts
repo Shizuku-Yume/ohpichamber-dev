@@ -1,19 +1,27 @@
-/**
- * Owns Jev routing at runtime: which classification provider answers, whether
- * Auto is ready, which model and agent a send that selected `openchamber/auto`
- * runs on, and the safety net consulted in a `safety` permission session.
- * Failure paths fall back to the user's own behaviour for routing (the
- * fallback model) and to the user's own decision for the safety net: a request
- * Jev could not check waits for the user, and the UI is told why.
- *
- * Host-owned routing chooses a real model before the Agent Service executes
- * the request. The Auto sentinel is a Host selection, never an OMP model.
- */
 import { z } from 'zod';
-import { ApprovalRequestSchema, EntityIdSchema, ModelCatalogSchema, ProviderCatalogSchema, modelRefKey } from '@openchamber/agent-contract';
+import {
+  ApprovalRequestSchema,
+  EntityIdSchema,
+  HistoryPageSchema,
+  ModelCatalogSchema,
+  ProviderCatalogSchema,
+  modelRefKey,
+} from '@openchamber/agent-contract';
+import type { ApprovalRequest, Model } from '@openchamber/agent-contract';
 import { BUILTIN_CATEGORIES } from './defaults.js';
 import { createRoutingStore, parseEffectiveConfig } from './store.js';
-import { buildPermissionRequest, buildProbeRequest, buildRoutingRequest, createJevClient, decidePermission, decideRouting, isProbeAnswer } from './jev.js';
+import type { CustomEndpoint, RoutingCategory, RoutingConfig, RoutingModel } from './store.js';
+import {
+  buildPermissionRequest,
+  buildProbeRequest,
+  buildRoutingRequest,
+  createJevClient,
+  decidePermission,
+  decideRouting,
+  isProbeAnswer,
+} from './jev.js';
+import type { AssistSourceMessage, AssistSourcePart } from '../session-assist/context.js';
+import type { RoutingPermission } from './jev.js';
 import {
   CLASSIFIER_SOURCES,
   classifierEndpoint,
@@ -22,50 +30,57 @@ import {
   readPinnedCustomEndpoint,
   resolveClassifier,
 } from './classifier.js';
+import type { Classifier, ClassifierEndpoint, ClassifierKeys, ClassifierSource } from './classifier.js';
 import { turnsToHistory } from './history.js';
+import type { HistoryEntry, RoutingHistory } from './history.js';
 import { loadSettledTurns } from '../session-assist/context.js';
 import { PROMPT_CACHE_TTL_MS, cacheHoldCategory } from './cache.js';
 import { ENTERPRISE_MODE_ERROR, isEnterpriseMode } from '../enterprise-mode.js';
+import type { JsonValue } from '../shared/json-values.js';
+import type { QueryValue } from '../shared/http-contracts.js';
 
 const HISTORY_TIMEOUT_MS = 2500;
-/** A held permission is remembered so reconnect reconciliation does not re-ask Jev. */
 const PERMISSION_DECISION_TTL_MS = 15 * 60 * 1000;
 
-const errorMessage = (error) => (error instanceof Error ? error.message : String(error));
+const errorMessage = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
 
-
-
-/** Extensions that name an image when its media type is not a `data:` URL. */
 const IMAGE_EXTENSIONS = new Set(['avif', 'bmp', 'gif', 'heic', 'heif', 'ico', 'jpeg', 'jpg', 'png', 'svg', 'webp']);
 
-// The Host prompt carries attachments as `{ attachmentId, name, mediaType, uri }`;
-// Jev reads text only, so a pasted image has to be stated in the request it
-// judges. Kept beside `routingRequestTextOf` rather than inside the caller,
-// so the rule lives with the classifier it serves.
-const isImageAttachment = (attachment) => {
-  const mediaType = typeof attachment?.mediaType === 'string' ? attachment.mediaType.trim().toLowerCase() : '';
+export interface RoutingAttachmentLike {
+  mediaType?: string | null | undefined;
+  name?: string | null | undefined;
+}
+
+export interface RoutingTextInput {
+  text?: string | null | undefined;
+  attachments?: readonly RoutingAttachmentLike[] | JsonValue | undefined;
+}
+
+const attachmentInputSchema = z.object({
+  mediaType: z.string().nullable().optional(),
+  name: z.string().nullable().optional(),
+});
+
+const isImageAttachment = (attachment: z.infer<typeof attachmentInputSchema>): boolean => {
+  const mediaType = attachment.mediaType ? attachment.mediaType.trim().toLowerCase() : '';
   if (mediaType.startsWith('image/')) return true;
-  const name = typeof attachment?.name === 'string' ? attachment.name.toLowerCase() : '';
+  const name = attachment.name ? attachment.name.toLowerCase() : '';
   const dot = name.lastIndexOf('.');
   return dot > 0 && IMAGE_EXTENSIONS.has(name.slice(dot + 1));
 };
 
-/**
- * The attachment fact for the classifier: without it the router discards the
- * one cue that distinguishes "look at this screenshot" from "fix the
- * image-upload endpoint".
- */
-export const attachmentHint = (input) => {
-  const attachments = Array.isArray(input?.attachments) ? input.attachments : [];
-  const images = attachments.filter(isImageAttachment);
+export const attachmentHint = (input: RoutingTextInput | null | undefined): string => {
+  const parsed = z.array(attachmentInputSchema).safeParse(input?.attachments);
+  if (!parsed.success) return '';
+  const images = parsed.data.filter(isImageAttachment);
   if (images.length === 0) return '';
-  const names = images.map((attachment) => (typeof attachment?.name === 'string' ? attachment.name.trim() : '')).filter(Boolean).slice(0, 3);
+  const names = images.map((attachment) => (attachment.name ? attachment.name.trim() : '')).filter(Boolean).slice(0, 3);
   const count = images.length === 1 ? 'an image' : `${images.length} images`;
   return `\n\n[The user attached ${count}${names.length > 0 ? `: ${names.join(', ')}` : ''}]`;
 };
 
-/** What the classifier sees for this send: the user's words plus the attachment fact. */
-export const routingRequestTextOf = (input) => `${(input?.text ?? '').trim()}${attachmentHint(input)}`.trim();
+export const routingRequestTextOf = (input: RoutingTextInput | null | undefined): string =>
+  `${(input?.text ?? '').trim()}${attachmentHint(input)}`.trim();
 
 const customEndpointInputSchema = z.object({
   url: z.string().trim().min(1).max(2000),
@@ -73,9 +88,175 @@ const customEndpointInputSchema = z.object({
   key: z.string().trim().max(4000).nullable().optional(),
 });
 
-/** Project the persisted routing binding into captured native send options. */
-const toModelRef = (model, variant) => {
-  const ref = { providerId: model.providerID, modelId: model.modelID };
+const agentErrorBodySchema = z.object({
+  detail: z.string().optional(),
+  code: z.string().optional(),
+});
+
+const resolvedCredentialSchema = z.object({
+  type: z.literal('api_key'),
+  key: z.string().min(1),
+});
+
+const routingAskErrorSchema = z.object({
+  code: z.string().optional(),
+  status: z.number().optional(),
+});
+
+export interface RoutingResolvedModel {
+  providerId: string;
+  modelId: string;
+  reasoningEffort?: string | null;
+  variant?: string | null;
+}
+
+export interface RoutingSelectionDecision {
+  providerID: string;
+  modelID: string;
+  variant: string | null;
+  reasoningEffort: string | null;
+  agent: string | null;
+}
+
+export interface RoutingAttemptRecord {
+  sessionId: string;
+  at: number;
+  category: string | null;
+  confidence: number;
+  reason: string;
+  ms: number;
+  cacheHold?: { requested: string };
+  error?: string;
+}
+
+export type RoutingDecision = RoutingAttemptRecord & RoutingSelectionDecision;
+
+export interface RoutingStateProperties {
+  available: boolean;
+  autoReady: boolean;
+  jevAvailable: boolean;
+  tokenPresent: boolean;
+  jevSource: 'typesafe' | 'zen-free';
+}
+
+export type RoutingPermissionSkippedEvent = {
+  permissionId: RoutingPermission['id'];
+  sessionId: RoutingPermission['sessionID'];
+  directory: JsonValue;
+  error: string;
+};
+
+export type RoutingPermissionHeldEvent = {
+  permissionId: RoutingPermission['id'];
+  sessionId: RoutingPermission['sessionID'];
+  directory: JsonValue;
+  score: number;
+  kind: string | null;
+};
+
+export type RoutingUiEvent =
+  | { type: 'openchamber:routing.updated'; properties: RoutingStateProperties }
+  | { type: 'openchamber:routing.decision'; properties: RoutingDecision }
+  | { type: 'openchamber:routing.safety-skipped'; properties: RoutingPermissionSkippedEvent }
+  | { type: 'openchamber:routing.permission-held'; properties: RoutingPermissionHeldEvent };
+
+export interface RoutingAgentService {
+  request: (path: string, init?: RequestInit) => Promise<Response>;
+}
+
+export interface RoutingWorkspaceScope {
+  workspaceId: string;
+  agentDirectoryId: string;
+  projectId?: string;
+  cwd?: string;
+}
+
+export interface RoutingSessionScope {
+  sessionId?: string;
+  workspaceId: string;
+  projectId?: string;
+  cwd?: string;
+}
+
+export interface RoutingCredentialSelection {
+  workspaceId: string;
+  agentDirectoryId: string;
+  providerId: string;
+  credentialRef: string;
+  purpose: 'routing';
+}
+
+export interface RoutingCredential {
+  type: string;
+  key?: string | null;
+}
+
+export interface RoutingRuntimeOptions {
+  dataDir: string;
+  service: RoutingAgentService;
+  resolveWorkspaceScope: (workspaceId: string) => Promise<RoutingWorkspaceScope | null | undefined>;
+  resolveSessionScope: (sessionId: string) => Promise<RoutingSessionScope | null | undefined>;
+  broadcastGlobalUiEvent?: ((event: RoutingUiEvent) => void) | undefined;
+  fetchImpl?: typeof fetch;
+  store?: ReturnType<typeof createRoutingStore>;
+  jev?: Pick<ReturnType<typeof createJevClient>, 'ask'>;
+  resolveCredential: (selection: RoutingCredentialSelection) => Promise<RoutingCredential | null | undefined>;
+  enterpriseMode?: () => boolean;
+  readPinnedEndpoint?: typeof readPinnedCustomEndpoint;
+  listCatalogModels?: ((workspaceId: string) => Promise<Model[]>) | null;
+  readSessionHistory?: ((scope: { sessionId: string; directory?: string | null | undefined }) => Promise<RoutingHistory>) | null;
+  now?: () => number;
+}
+
+export interface RoutingDescribeResult {
+  available: boolean;
+  autoReady: boolean;
+  jevAvailable: boolean;
+  tokenPresent: boolean;
+  geminiKeyPresent: boolean;
+  customEndpoint: { url: string; model: string; keyPresent: boolean; pinned: boolean } | null;
+  enterpriseMode: boolean;
+  jevSource: 'typesafe' | 'zen-free';
+  classifier: ReturnType<typeof legacyClassifier>;
+  classification: Classifier;
+  config: RoutingConfig;
+  builtins: typeof BUILTIN_CATEGORIES;
+}
+
+export interface AutoSelectionRequest {
+  sessionId: string;
+  directory?: string | null | undefined;
+  workspaceId?: string | undefined;
+  model: { providerId: string; modelId: string } | null | undefined;
+  agent?: string | null | undefined;
+  requestText?: string | undefined;
+}
+
+export interface AutoSelectionResult {
+  model: RoutingResolvedModel;
+  agent: null;
+  decision: RoutingDecision;
+}
+
+export type PermissionEvaluationResult =
+  | { action: 'hold'; unavailable?: true; skipped?: string; score?: number; kind?: string | null }
+  | { action: 'accept'; score: number; kind: string | null };
+
+export interface HeldPermissionSummary {
+  permissionId: string;
+  score: number;
+  kind: string | null;
+}
+
+export type ClassifierProbeResult =
+  | { ok: true; source: Exclude<ClassifierSource, 'off'>; model: string; ms: number }
+  | { ok: false; reason: 'unavailable' }
+  | { ok: false; reason: 'unparsable' | 'timeout'; source: Exclude<ClassifierSource, 'off'>; model: string }
+  | { ok: false; reason: 'http'; status: number; source: Exclude<ClassifierSource, 'off'>; model: string }
+  | { ok: false; reason: 'network'; message: string; source: Exclude<ClassifierSource, 'off'>; model: string };
+
+const toModelRef = (model: RoutingModel, variant: string | null): RoutingResolvedModel => {
+  const ref: RoutingResolvedModel = { providerId: model.providerID, modelId: model.modelID };
   if (variant) {
     ref.reasoningEffort = variant;
     ref.variant = variant;
@@ -83,6 +264,31 @@ const toModelRef = (model, variant) => {
   return ref;
 };
 
+const createProblem = (message: string, status: number, code?: string) => {
+  const error = new Error(message);
+  return code ? Object.assign(error, { status, code }) : Object.assign(error, { status });
+};
+
+type NativeSourceKey = 'openrouter' | 'vercel';
+
+export interface RoutingRuntime {
+  describe: (workspaceId?: QueryValue) => Promise<RoutingDescribeResult>;
+  classifierEndpoint: (workspaceId: string) => Promise<ClassifierEndpoint | null>;
+  resolveAutoSelection: (input: AutoSelectionRequest) => Promise<AutoSelectionResult | null>;
+  evaluatePermission: (permission: RoutingPermission | ApprovalRequest | JsonValue, directory?: JsonValue) => Promise<PermissionEvaluationResult>;
+  forgetPermission: (permissionId: string) => void;
+  heldPermissions: () => HeldPermissionSummary[];
+  legacySafetyNetEnabled: () => Promise<boolean>;
+  updateConfig: (input: JsonValue | undefined) => Promise<RoutingDescribeResult>;
+  setToken: (token: JsonValue | undefined) => Promise<RoutingDescribeResult>;
+  clearToken: () => Promise<RoutingDescribeResult>;
+  setGeminiKey: (key: JsonValue | undefined) => Promise<RoutingDescribeResult>;
+  clearGeminiKey: () => Promise<RoutingDescribeResult>;
+  setClassifierSource: (source: JsonValue | undefined) => Promise<RoutingDescribeResult>;
+  setCustomEndpoint: (input: JsonValue | undefined) => Promise<RoutingDescribeResult>;
+  clearCustomEndpoint: () => Promise<RoutingDescribeResult>;
+  testClassifier: (draft?: JsonValue, workspaceId?: QueryValue) => Promise<ClassifierProbeResult>;
+}
 
 export function createRoutingRuntime({
   dataDir,
@@ -99,93 +305,148 @@ export function createRoutingRuntime({
   listCatalogModels = null,
   readSessionHistory = null,
   now = Date.now,
-}) {
-  if (!service || typeof service.request !== 'function') throw new Error('routing requires the Agent service');
-  if (typeof resolveWorkspaceScope !== 'function' || typeof resolveSessionScope !== 'function') throw new Error('routing requires Host scope resolvers');
-  if (typeof resolveCredential !== 'function') throw new Error('routing requires the selected credential resolver');
-  const permissionDecisions = new Map();
+}: RoutingRuntimeOptions): RoutingRuntime {
+  if (!service?.request) throw new Error('routing requires the Agent service');
+  if (!resolveWorkspaceScope || !resolveSessionScope) throw new Error('routing requires Host scope resolvers');
+  if (!resolveCredential) throw new Error('routing requires the selected credential resolver');
 
-  const broadcast = (type, properties) => {
+  const permissionDecisions = new Map<string, { at: number; identity: string; result: PermissionEvaluationResult }>();
+
+  const broadcast = (event: RoutingUiEvent) => {
     try {
-      broadcastGlobalUiEvent?.({ type, properties });
+      broadcastGlobalUiEvent?.(event);
     } catch (error) {
-      console.warn(`[routing] failed to broadcast ${type}:`, errorMessage(error));
+      console.warn(`[routing] failed to broadcast ${event.type}:`, errorMessage(error));
     }
   };
 
-  const enabledCategories = (config) => config.categories.filter((category) => category.enabled);
+  const enabledCategories = (config: RoutingConfig) => config.categories.filter((category) => category.enabled);
 
-  const scopeForWorkspace = async (workspaceId) => {
-    if (!EntityIdSchema.safeParse(workspaceId).success) throw Object.assign(new Error('A workspace identity is required'), { status: 400, code: 'INVALID_REQUEST' });
-    const scope = await resolveWorkspaceScope(workspaceId);
-    if (!scope || scope.workspaceId !== workspaceId || !EntityIdSchema.safeParse(scope.agentDirectoryId).success)
-      throw Object.assign(new Error('Workspace scope was not found'), { status: 403, code: 'UNAUTHORIZED' });
+  const requestAgent = async (resourcePath: string, init: RequestInit = {}): Promise<JsonValue> => {
+    const headers = new Headers(init.headers);
+    headers.set('accept', 'application/json');
+    const response = await service.request(resourcePath, { ...init, headers });
+    const rawBody = await response.json().catch(() => null);
+    if (!response.ok) {
+      const parsedError = agentErrorBodySchema.safeParse(rawBody);
+      const detail = parsedError.success && parsedError.data.detail ? parsedError.data.detail : 'Agent service request failed';
+      const code = parsedError.success ? parsedError.data.code : undefined;
+      throw createProblem(detail, response.status, code);
+    }
+    return z.json().parse(rawBody);
+  };
+
+  const scopeForWorkspace = async (workspaceId: QueryValue | undefined): Promise<RoutingWorkspaceScope> => {
+    const parsedId = EntityIdSchema.safeParse(workspaceId);
+    if (!parsedId.success) throw createProblem('A workspace identity is required', 400, 'INVALID_REQUEST');
+    const scope = await resolveWorkspaceScope(parsedId.data);
+    if (!scope || scope.workspaceId !== parsedId.data || !EntityIdSchema.safeParse(scope.agentDirectoryId).success) {
+      throw createProblem('Workspace scope was not found', 403, 'UNAUTHORIZED');
+    }
     return scope;
   };
+
+  const scopeForSession = async (sessionId: string): Promise<RoutingSessionScope> => {
+    const scope = await resolveSessionScope(sessionId);
+    if (!scope) throw createProblem('Session scope was not found', 404, 'SESSION_NOT_FOUND');
+    return scope;
+  };
+
   const nativeSources = {
     openrouter: { providerId: 'openrouter', keyField: 'openrouterKey' },
     vercel: { providerId: 'vercel-ai-gateway', keyField: 'vercelKey' },
-  };
+  } as const;
 
-  /** Catalogs describe presence; only the source used for this request resolves a secret. */
-  const resolveAccess = async (scope = null, useCredential = false) => {
+  const isNativeSource = (source: ClassifierSource): source is NativeSourceKey =>
+    source === 'openrouter' || source === 'vercel';
+
+  const resolveAccess = async (scope: RoutingWorkspaceScope | null = null, useCredential = false) => {
     const [typesafeKey, stored, savedEndpoint, geminiKey] = await Promise.all([
       store.readToken(), store.readClassifierSource(), store.readCustomEndpoint(), store.readGeminiKey(),
     ]);
     const pinned = readPinnedEndpoint();
     const customEndpoint = pinned ?? savedEndpoint;
     const enterprise = enterpriseMode();
-    const selected = !enterprise ? stored : pinned && stored !== 'off' ? 'custom' : 'off';
-    const keys = { typesafeKey, customEndpoint, geminiKey };
-    const selections = {};
+    const selected: ClassifierSource | 'zen-promo' | 'zen-key' | null = !enterprise
+      ? stored
+      : pinned && stored !== 'off' ? 'custom' : 'off';
+    const keys: ClassifierKeys = { typesafeKey, customEndpoint, geminiKey };
+    const selections: Partial<Record<NativeSourceKey, RoutingCredentialSelection>> = {};
     if (scope && !enterprise) {
-      const catalog = ProviderCatalogSchema.parse(await requestAgent(`/api/agent/v1/workspaces/${encodeURIComponent(scope.workspaceId)}/providers`));
-      if (catalog.workspaceId !== scope.workspaceId) throw Object.assign(new Error('Provider catalog belongs to another workspace'), { status: 403, code: 'UNAUTHORIZED' });
-      for (const [source, { providerId, keyField }] of Object.entries(nativeSources)) {
+      const catalog = ProviderCatalogSchema.parse(
+        await requestAgent(`/api/agent/v1/workspaces/${encodeURIComponent(scope.workspaceId)}/providers`),
+      );
+      if (catalog.workspaceId !== scope.workspaceId) {
+        throw createProblem('Provider catalog belongs to another workspace', 403, 'UNAUTHORIZED');
+      }
+      for (const source of ['openrouter', 'vercel'] as const) {
+        const { providerId, keyField } = nativeSources[source];
         const provider = catalog.providers.find((entry) => entry.providerId === providerId);
         if (provider?.auth.status !== 'configured' || provider.auth.method !== 'api-key') continue;
         selections[source] = {
-          workspaceId: scope.workspaceId, agentDirectoryId: scope.agentDirectoryId,
-          providerId, credentialRef: provider.auth.credentialRef, purpose: 'routing'
+          workspaceId: scope.workspaceId,
+          agentDirectoryId: scope.agentDirectoryId,
+          providerId,
+          credentialRef: provider.auth.credentialRef,
+          purpose: 'routing',
         };
-        keys[keyField] = true;
+        keys[keyField] = 'present';
       }
     }
     const classifier = resolveClassifier({ selected, ...keys });
-    let endpoint = null;
+    let endpoint: ClassifierEndpoint | null = null;
     if (useCredential && classifier.effective) {
-      const native = nativeSources[classifier.effective];
-      if (native) {
-        const credential = await resolveCredential(selections[classifier.effective]);
-        if (credential?.type !== 'api_key' || typeof credential.key !== 'string' || !credential.key)
-          throw Object.assign(new Error('Selected routing credential is unavailable'), { status: 422, code: 'CREDENTIAL_UNAVAILABLE' });
-        keys[native.keyField] = credential.key;
+      const effective = classifier.effective;
+      if (isNativeSource(effective)) {
+        const selection = selections[effective];
+        if (!selection) {
+          throw createProblem('Selected routing credential is unavailable', 422, 'CREDENTIAL_UNAVAILABLE');
+        }
+        const credential = await resolveCredential(selection);
+        const parsedCredential = resolvedCredentialSchema.safeParse(credential);
+        if (!parsedCredential.success) {
+          throw createProblem('Selected routing credential is unavailable', 422, 'CREDENTIAL_UNAVAILABLE');
+        }
+        keys[nativeSources[effective].keyField] = parsedCredential.data.key;
       }
-      endpoint = classifierEndpoint(classifier.effective, keys);
+      if (effective === 'custom') {
+        if (!customEndpoint) {
+          throw createProblem('Selected routing credential is unavailable', 422, 'CREDENTIAL_UNAVAILABLE');
+        }
+        endpoint = classifierEndpoint('custom', { ...keys, customEndpoint });
+      } else if (effective === 'gemini') {
+        if (!geminiKey) {
+          throw createProblem('Selected routing credential is unavailable', 422, 'CREDENTIAL_UNAVAILABLE');
+        }
+        endpoint = classifierEndpoint('gemini', { ...keys, geminiKey });
+      } else {
+        endpoint = classifierEndpoint(effective, keys);
+      }
     }
-    return { classifier, endpoint, tokenPresent: Boolean(typesafeKey), geminiKeyPresent: Boolean(geminiKey), customEndpoint, pinned: pinned !== null };
+    return {
+      classifier,
+      endpoint,
+      tokenPresent: Boolean(typesafeKey),
+      geminiKeyPresent: Boolean(geminiKey),
+      customEndpoint,
+      pinned: pinned !== null,
+    };
   };
 
-  // What Settings shows of the custom endpoint: never the key itself.
-  const describeCustomEndpoint = (endpoint, pinned) => (endpoint
+  const describeCustomEndpoint = (endpoint: CustomEndpoint | null, pinned: boolean) => (endpoint
     ? { url: endpoint.url, model: endpoint.model, keyPresent: Boolean(endpoint.key), pinned }
     : null);
 
-  const pinnedEndpointError = () => Object.assign(
-    new Error('The custom endpoint is set by your administrator and cannot be changed here'),
-    { status: 409 },
+  const pinnedEndpointError = () => createProblem(
+    'The custom endpoint is set by your administrator and cannot be changed here',
+    409,
   );
 
-  /** What the client needs to decide whether to offer Auto and the safety net, and what Settings shows. */
-  const describe = async (workspaceId) => {
+  const describe = async (workspaceId?: QueryValue): Promise<RoutingDescribeResult> => {
     const scope = workspaceId === undefined ? null : await scopeForWorkspace(workspaceId);
     const [config, access] = await Promise.all([store.readConfig(), resolveAccess(scope)]);
     const jevAvailable = access.classifier.effective !== null;
     const autoReady = jevAvailable && config.enabled && Boolean(config.fallback) && enabledCategories(config).length >= 2;
-    // Built-in text travels with the config so "Reset" in Settings restores the shipped wording.
-    // `jevSource` is the two-value field clients from before the classifier
-    // pick parse, `classifier` what v2.0.2 clients parse, and `classification`
-    // the full picture.
     return {
       available: true,
       autoReady,
@@ -202,58 +463,86 @@ export function createRoutingRuntime({
     };
   };
 
-  const publishUpdated = async () => {
+  const publishUpdated = async (): Promise<RoutingDescribeResult> => {
     const state = await describe();
-    broadcast('openchamber:routing.updated', {
-      available: state.available,
-      autoReady: state.autoReady,
-      jevAvailable: state.jevAvailable,
-      tokenPresent: state.tokenPresent,
-      jevSource: state.jevSource,
+    broadcast({
+      type: 'openchamber:routing.updated',
+      properties: {
+        available: state.available,
+        autoReady: state.autoReady,
+        jevAvailable: state.jevAvailable,
+        tokenPresent: state.tokenPresent,
+        jevSource: state.jevSource,
+      },
     });
     return state;
   };
 
-  const requestAgent = async (path, init = {}) => {
-    const response = await service.request(path, { ...init, headers: { accept: 'application/json', ...(init.headers || {}) } });
-    const body = await response.json().catch(() => null);
-    if (!response.ok) throw Object.assign(new Error(body?.detail || 'Agent service request failed'), { status: response.status, code: body?.code });
-    return body;
-  };
-  const scopeForSession = async (sessionId) => {
-    const scope = await resolveSessionScope(sessionId);
-    if (!scope) throw Object.assign(new Error('Session scope was not found'), { status: 404, code: 'SESSION_NOT_FOUND' });
-    return scope;
-  };
-  const readHistory = readSessionHistory ?? (async ({ sessionId }) => {
+  const readHistory = readSessionHistory ?? (async ({ sessionId }): Promise<RoutingHistory> => {
     await scopeForSession(sessionId);
-    const completedAtByMessage = new Map();
+    const completedAtByMessage = new Map<string, number>();
     const turns = await loadSettledTurns({
       signal: AbortSignal.timeout(HISTORY_TIMEOUT_MS),
-      readPage: async ({ limit, cursor }) => {
-        const page = await requestAgent(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/history?${new URLSearchParams({ limit: String(limit), ...(cursor ? { cursor } : {}) })}`);
+      readPage: async ({ limit, cursor }: { limit: number; cursor?: string }) => {
+        const params = new URLSearchParams({ limit: String(limit) });
+        if (cursor) params.set('cursor', cursor);
+        const page = HistoryPageSchema.parse(
+          await requestAgent(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/history?${params.toString()}`),
+        );
         for (const turn of page.turns) {
-          if (turn.status !== 'completed' || !Number.isFinite(turn.finishedAt)) continue;
+          if (turn.status !== 'completed' || turn.finishedAt === undefined || !Number.isFinite(turn.finishedAt)) continue;
           for (const messageId of turn.assistantMessageIds) completedAtByMessage.set(messageId, turn.finishedAt);
         }
-        return page;
+        return {
+          turns: page.turns,
+          nextCursor: page.nextCursor,
+          messages: page.messages.map((message) => {
+            const mappedMessage: AssistSourceMessage = {
+              messageId: message.messageId,
+              turnId: message.turnId,
+              role: message.role,
+              createdAt: message.createdAt,
+              parts: message.parts.map((part) => {
+                const mappedPart: AssistSourcePart = { type: part.type };
+                if ('content' in part && part.content !== undefined) mappedPart.content = part.content;
+                return mappedPart;
+              }),
+            };
+            if (message.providerId !== undefined) mappedMessage.providerId = message.providerId;
+            if (message.modelId !== undefined) mappedMessage.modelId = message.modelId;
+            return mappedMessage;
+          }),
+        };
       },
     });
     const last = turns.at(-1)?.assistant;
-    const completedAt = completedAtByMessage.get(last?.id);
+    const completedAt = last ? completedAtByMessage.get(last.id) : undefined;
     return {
       history: turnsToHistory(turns),
-      lastAnswer: last?.providerId && last.modelId && Number.isFinite(completedAt)
+      lastAnswer: last?.providerId && last.modelId && completedAt !== undefined && Number.isFinite(completedAt)
         ? { providerID: last.providerId, modelID: last.modelId, finishedAt: completedAt }
         : null,
     };
   });
 
-  /** Hold downward moves only while the last settled model's prompt cache is warm. */
-  const cacheHold = async ({ config, chosen, composerAgent, lastAnswer }) => {
-    if (!config.preserveCache || !lastAnswer) return null;
+  const cacheHold = async ({
+    config,
+    chosen,
+    composerAgent,
+    lastAnswer,
+  }: {
+    config: RoutingConfig;
+    chosen: RoutingCategory | null;
+    composerAgent: string | null;
+    lastAnswer: RoutingHistory['lastAnswer'];
+  }): Promise<RoutingCategory | null> => {
+    if (!config.preserveCache || !lastAnswer || !config.fallback) return null;
     const held = cacheHoldCategory({
-      categories: enabledCategories(config), fallback: config.fallback, composerAgent, chosen, current: lastAnswer,
+      categories: enabledCategories(config),
+      fallback: config.fallback,
+      composerAgent,
+      chosen,
+      current: lastAnswer,
     });
     if (!held) return null;
     const idle = now() - lastAnswer.finishedAt;
@@ -261,36 +550,45 @@ export function createRoutingRuntime({
     return null;
   };
 
-  // A category without a model of its own means "the fallback pair"; a variant
-  // only travels with the model it was chosen for.
-  const chooseSelection = (config, choice, _composerAgent) => {
-    const own = Boolean(choice?.model);
-    const model = own ? choice.model : config.fallback.model;
-    const variant = own ? choice.variant : config.fallback.variant;
+  const chooseSelection = (config: RoutingConfig, choice: RoutingCategory | null) => {
+    const fallback = config.fallback;
+    if (!fallback) throw createProblem('Auto routing is selected but no fallback model is configured', 400);
+    const model = choice?.model ?? fallback.model;
+    const variant = choice?.model ? choice.variant : fallback.variant;
     return {
       model: toModelRef(model, variant),
       agent: null,
-      decision: { providerID: model.providerID, modelID: model.modelID, variant: variant ?? null, reasoningEffort: variant ?? null, agent: null },
+      decision: {
+        providerID: model.providerID,
+        modelID: model.modelID,
+        variant: variant ?? null,
+        reasoningEffort: variant ?? null,
+        agent: null,
+      },
     };
   };
 
-  const readCatalog = listCatalogModels ?? (async (workspaceId) => {
+  const readCatalog = listCatalogModels ?? (async (workspaceId: string): Promise<Model[]> => {
     await scopeForWorkspace(workspaceId);
-    const catalog = ModelCatalogSchema.parse(await requestAgent(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/models`));
-    if (catalog.workspaceId !== workspaceId) throw Object.assign(new Error('Model catalog belongs to another workspace'), { status: 403, code: 'UNAUTHORIZED' });
+    const catalog = ModelCatalogSchema.parse(
+      await requestAgent(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/models`),
+    );
+    if (catalog.workspaceId !== workspaceId) {
+      throw createProblem('Model catalog belongs to another workspace', 403, 'UNAUTHORIZED');
+    }
     return catalog.models;
   });
 
-  /**
-   * Drops a variant the canonical model catalog does not list. An unreadable
-   * catalog or a model not present in it cannot invalidate a saved variant.
-   */
-  const withKnownVariant = async (selection, workspaceId) => {
+  const withKnownVariant = async (
+    selection: { model: RoutingResolvedModel; agent: null; decision: RoutingSelectionDecision },
+    workspaceId: string,
+  ) => {
     const effort = selection.model.reasoningEffort ?? selection.model.variant;
     if (!effort) return selection;
-    let models;
-    try { models = await readCatalog(workspaceId); }
-    catch (error) {
+    let models: Model[];
+    try {
+      models = await readCatalog(workspaceId);
+    } catch (error) {
       console.warn('[routing] model catalog unavailable, keeping the saved thinking effort:', errorMessage(error));
       return selection;
     }
@@ -301,7 +599,7 @@ export function createRoutingRuntime({
       ? entry.reasoningOptions.map((option) => option.reasoningEffort)
       : [];
     const knownVariants = Array.isArray(entry.variants)
-      ? entry.variants.map((v) => v.variant)
+      ? entry.variants.map((variant) => variant.variant)
       : [];
     if (effort === 'off' || knownEfforts.includes(effort) || knownVariants.includes(effort)) {
       return {
@@ -318,28 +616,30 @@ export function createRoutingRuntime({
     };
   };
 
-  /**
-   * Resolves one send that named the Auto sentinel. Returns the model and
-   * agent the send must use, or null when a real model was selected.
-   *
-   * The caller captures the resolved model and agent for native delivery.
-   * Without a configured fallback the request fails before any execution.
-   */
-  const resolveAutoSelection = async ({ sessionId, directory, workspaceId: requestedWorkspaceId, model, agent: _agent, requestText }) => {
+  const resolveAutoSelection = async ({
+    sessionId,
+    directory,
+    workspaceId: requestedWorkspaceId,
+    model,
+    agent: _agent,
+    requestText,
+  }: AutoSelectionRequest): Promise<AutoSelectionResult | null> => {
     if (model?.providerId !== 'openchamber' || model?.modelId !== 'auto') return null;
     const sessionScope = await scopeForSession(sessionId);
     const workspaceId = requestedWorkspaceId ?? sessionScope.workspaceId;
-    if (sessionScope.workspaceId !== workspaceId) throw Object.assign(new Error('Session workspace does not match routing workspace'), { status: 403, code: 'UNAUTHORIZED' });
+    if (sessionScope.workspaceId !== workspaceId) {
+      throw createProblem('Session workspace does not match routing workspace', 403, 'UNAUTHORIZED');
+    }
     const state = await describe(workspaceId);
     const config = state.config;
     if (!config?.fallback) {
-      throw Object.assign(new Error('Auto routing is selected but no fallback model is configured'), { status: 400 });
+      throw createProblem('Auto routing is selected but no fallback model is configured', 400);
     }
-    const decision = { sessionId, at: now(), category: null, confidence: 0, reason: 'not-ready', ms: 0 };
-    let selection;
+    const attempt: RoutingAttemptRecord = { sessionId, at: now(), category: null, confidence: 0, reason: 'not-ready', ms: 0 };
+    let selection: { model: RoutingResolvedModel; agent: null; decision: RoutingSelectionDecision };
     if (state.autoReady) {
-      let history = [];
-      let lastAnswer = null;
+      let history: HistoryEntry[] = [];
+      let lastAnswer: RoutingHistory['lastAnswer'] = null;
       try {
         ({ history, lastAnswer } = await readHistory({ sessionId, directory }));
       } catch (error) {
@@ -347,46 +647,38 @@ export function createRoutingRuntime({
       }
       const { endpoint } = await resolveAccess(await scopeForWorkspace(workspaceId), true);
       try {
-        // A provider removed between presence discovery and execution is not usable.
         if (!endpoint) throw new Error('No classification provider is available');
         const request = (requestText ?? '').trim();
         const { answers, ms } = await jev.ask(buildRoutingRequest({ categories: enabledCategories(config), history, request }), endpoint);
         const result = decideRouting(answers.category, { categories: enabledCategories(config), minConfidence: config.minConfidence });
-        decision.category = result.category?.id ?? null;
-        decision.confidence = result.confidence;
-        decision.reason = result.reason;
-        decision.ms = ms;
+        attempt.category = result.category?.id ?? null;
+        attempt.confidence = result.confidence;
+        attempt.reason = result.reason;
+        attempt.ms = ms;
         const held = await cacheHold({ config, chosen: result.category, composerAgent: null, lastAnswer });
-        if (held) {
-          // The send runs as the category the session is already on;
-          // `cacheHold.requested` keeps what Jev asked for.
-          decision.category = held.id;
-          decision.cacheHold = { requested: result.category.id };
+        if (held && result.category) {
+          attempt.category = held.id;
+          attempt.cacheHold = { requested: result.category.id };
         }
         selection = chooseSelection(config, held ?? result.category);
       } catch (error) {
-        decision.reason = 'error';
-        decision.error = errorMessage(error);
+        attempt.reason = 'error';
+        attempt.error = errorMessage(error);
         selection = chooseSelection(config, null);
       }
     } else {
       selection = chooseSelection(config, null);
     }
     selection = await withKnownVariant(selection, workspaceId);
-    Object.assign(decision, selection.decision);
-    broadcast('openchamber:routing.decision', decision);
+    const decision: RoutingDecision = { ...attempt, ...selection.decision };
+    broadcast({ type: 'openchamber:routing.decision', properties: decision });
     return { model: selection.model, agent: null, decision };
   };
 
-
-  /**
-   * Consulted by permission auto-accept in a `safety` session before it
-   * replies. `accept` replies; `hold` leaves the request for the user. Only a
-   * verdict from Jev accepts: with no classification provider the request
-   * waits quietly, the way an `ask` session's would; when Jev fails it waits
-   * too, and the UI is told why (`skipped`).
-   */
-  const evaluatePermission = async (permission, directory) => {
+  const evaluatePermission = async (
+    permission: RoutingPermission | ApprovalRequest | JsonValue,
+    directory?: JsonValue,
+  ): Promise<PermissionEvaluationResult> => {
     const parsed = ApprovalRequestSchema.safeParse(permission);
     if (!parsed.success || parsed.data.status !== 'pending') return { action: 'hold' };
     const approval = parsed.data;
@@ -394,13 +686,19 @@ export function createRoutingRuntime({
     const workspaceScope = await scopeForWorkspace(scope.workspaceId);
     const [config, presence] = await Promise.all([store.readConfig(), resolveAccess(workspaceScope)]);
     if (!presence.classifier.effective) return { action: 'hold', unavailable: true };
-    const identity = JSON.stringify([approval.sessionId, approval.epoch, approval.workerGeneration, approval.version,
-    presence.classifier.effective, config.safetyNet.threshold]);
+    const identity = JSON.stringify([
+      approval.sessionId,
+      approval.epoch,
+      approval.workerGeneration,
+      approval.version,
+      presence.classifier.effective,
+      config.safetyNet.threshold,
+    ]);
     const cached = permissionDecisions.get(approval.approvalId);
     if (cached?.identity === identity && now() - cached.at < PERMISSION_DECISION_TTL_MS) return cached.result;
     const access = await resolveAccess(workspaceScope, true);
     if (!access.endpoint) return { action: 'hold', unavailable: true };
-    let result;
+    let result: PermissionEvaluationResult;
     try {
       const { answers } = await jev.ask(buildPermissionRequest(approval), access.endpoint);
       const verdict = decidePermission(answers, { threshold: config.safetyNet.threshold });
@@ -408,28 +706,35 @@ export function createRoutingRuntime({
         ? { action: 'hold', score: verdict.score, kind: verdict.kind }
         : { action: 'accept', score: verdict.score, kind: verdict.kind };
     } catch (error) {
-      // Not remembered: reconnect reconciliation asks Jev again, and may accept.
       const skipped = errorMessage(error);
-      broadcast('openchamber:routing.safety-skipped', {
-        permissionId: approval.approvalId, sessionId: approval.sessionId, directory: directory ?? null, error: skipped,
+      broadcast({
+        type: 'openchamber:routing.safety-skipped',
+        properties: {
+          permissionId: approval.approvalId,
+          sessionId: approval.sessionId,
+          directory: directory ?? null,
+          error: skipped,
+        },
       });
       return { action: 'hold', skipped };
     }
     if (result.action === 'hold') {
-      broadcast('openchamber:routing.permission-held', {
-        permissionId: approval.approvalId, sessionId: approval.sessionId, directory: directory ?? null, score: result.score, kind: result.kind,
+      broadcast({
+        type: 'openchamber:routing.permission-held',
+        properties: {
+          permissionId: approval.approvalId,
+          sessionId: approval.sessionId,
+          directory: directory ?? null,
+          score: result.score ?? 0,
+          kind: result.kind ?? null,
+        },
       });
     }
     permissionDecisions.set(approval.approvalId, { at: now(), identity, result });
     return result;
   };
 
-  /**
-   * Whether the old global safety-net switch was on. Asked once, when the
-   * permission policy converts its pre-modes `true` entries: those sessions
-   * were auto-accepting behind the safety net, so they become `safety`.
-   */
-  const legacySafetyNetEnabled = async () => {
+  const legacySafetyNetEnabled = async (): Promise<boolean> => {
     try {
       return (await store.readConfig()).safetyNet.enabled === true;
     } catch {
@@ -437,104 +742,92 @@ export function createRoutingRuntime({
     }
   };
 
-  const forgetPermission = (permissionId) => {
+  const forgetPermission = (permissionId: string): void => {
     permissionDecisions.delete(permissionId);
   };
 
-  const updateConfig = async (input) => {
+  const updateConfig = async (input: JsonValue | undefined): Promise<RoutingDescribeResult> => {
     const config = parseEffectiveConfig(input);
     await store.writeConfig(config);
     return publishUpdated();
   };
 
-  const setToken = async (token) => {
+  const setToken = async (token: JsonValue | undefined): Promise<RoutingDescribeResult> => {
     const parsed = z.string().trim().min(1).max(4000).safeParse(token);
-    if (!parsed.success) throw Object.assign(new Error('A Jev API key is required'), { status: 400 });
-    if (enterpriseMode()) throw Object.assign(new Error(ENTERPRISE_MODE_ERROR), { status: 403 });
+    if (!parsed.success) throw createProblem('A Jev API key is required', 400);
+    if (enterpriseMode()) throw createProblem(ENTERPRISE_MODE_ERROR, 403);
     await store.writeToken(parsed.data);
-    // Pasting a key is choosing it.
     await store.writeClassifierSource('typesafe');
     return publishUpdated();
   };
 
-  const clearToken = async () => {
+  const clearToken = async (): Promise<RoutingDescribeResult> => {
     await store.clearToken();
     return publishUpdated();
   };
 
-  const setGeminiKey = async (key) => {
-    if (enterpriseMode()) throw Object.assign(new Error(ENTERPRISE_MODE_ERROR), { status: 403 });
+  const setGeminiKey = async (key: JsonValue | undefined): Promise<RoutingDescribeResult> => {
+    if (enterpriseMode()) throw createProblem(ENTERPRISE_MODE_ERROR, 403);
     const parsed = z.string().trim().min(1).max(4000).safeParse(key);
-    if (!parsed.success) throw Object.assign(new Error('A Gemini API key is required'), { status: 400 });
+    if (!parsed.success) throw createProblem('A Gemini API key is required', 400);
     await store.writeGeminiKey(parsed.data);
     await store.writeClassifierSource('gemini');
     return publishUpdated();
   };
 
-  const clearGeminiKey = async () => {
+  const clearGeminiKey = async (): Promise<RoutingDescribeResult> => {
     await store.clearGeminiKey();
     return publishUpdated();
   };
 
-  const setClassifierSource = async (source) => {
+  const setClassifierSource = async (source: JsonValue | undefined): Promise<RoutingDescribeResult> => {
     const parsed = z.enum(CLASSIFIER_SOURCES).safeParse(source);
-    if (!parsed.success) throw Object.assign(new Error(`Unknown classification provider: ${String(source)}`), { status: 400 });
+    if (!parsed.success) throw createProblem(`Unknown classification provider: ${String(source)}`, 400);
     const allowedInEnterprise = parsed.data === 'off' || (parsed.data === 'custom' && readPinnedEndpoint() !== null);
-    if (enterpriseMode() && !allowedInEnterprise) throw Object.assign(new Error(ENTERPRISE_MODE_ERROR), { status: 403 });
+    if (enterpriseMode() && !allowedInEnterprise) throw createProblem(ENTERPRISE_MODE_ERROR, 403);
     await store.writeClassifierSource(parsed.data);
     return publishUpdated();
   };
 
-  /**
-   * Saves the custom System One endpoint and picks it, the way saving a
-   * TypeSafe key does. `key`: a string replaces the saved one, null removes
-   * it, absent keeps it, so the URL or model can change without retyping it.
-   */
-  const setCustomEndpoint = async (input) => {
+  const setCustomEndpoint = async (input: JsonValue | undefined): Promise<RoutingDescribeResult> => {
     if (readPinnedEndpoint()) throw pinnedEndpointError();
-    if (enterpriseMode()) throw Object.assign(new Error(ENTERPRISE_MODE_ERROR), { status: 403 });
+    if (enterpriseMode()) throw createProblem(ENTERPRISE_MODE_ERROR, 403);
     const parsed = customEndpointInputSchema.safeParse(input);
-    if (!parsed.success) throw Object.assign(new Error('A URL and a model are required'), { status: 400 });
+    if (!parsed.success) throw createProblem('A URL and a model are required', 400);
     const { model, key } = parsed.data;
     const url = parseCustomEndpointUrl(parsed.data.url);
-    // An empty key field is the same as leaving it out.
     const keepKey = key === undefined || key === '';
     const savedKey = keepKey ? (await store.readCustomEndpoint())?.key : key;
-    const endpoint = { url, model };
+    const endpoint: CustomEndpoint = { url, model };
     if (savedKey) endpoint.key = savedKey;
     await store.writeCustomEndpoint(endpoint);
-    // Saving is choosing it; removing only the key is not a choice of anything.
     if (key !== null) await store.writeClassifierSource('custom');
     return publishUpdated();
   };
 
-  const clearCustomEndpoint = async () => {
+  const clearCustomEndpoint = async (): Promise<RoutingDescribeResult> => {
     if (readPinnedEndpoint()) throw pinnedEndpointError();
     await store.clearCustomEndpoint();
     return publishUpdated();
   };
 
-  /**
-   * Sends one small Jev request and reports what came back, so Settings can
-   * show a broken setup before a feature quietly falls back. Without `draft`
-   * it tests the provider answering now; with one it tests the custom endpoint
-   * fields as typed, before they are saved (an empty key reuses the saved
-   * one). Nothing is stored either way.
-   */
-  const testClassifier = async (draft, workspaceId) => {
+  const testClassifier = async (draft?: JsonValue, workspaceId?: QueryValue): Promise<ClassifierProbeResult> => {
     const scope = workspaceId === undefined ? null : await scopeForWorkspace(workspaceId);
-    let source;
-    let endpoint;
+    let source: Exclude<ClassifierSource, 'off'> | null;
+    let endpoint: ClassifierEndpoint | null;
     if (draft !== undefined) {
       if (readPinnedEndpoint()) throw pinnedEndpointError();
-      if (enterpriseMode()) throw Object.assign(new Error(ENTERPRISE_MODE_ERROR), { status: 403 });
+      if (enterpriseMode()) throw createProblem(ENTERPRISE_MODE_ERROR, 403);
       const parsed = customEndpointInputSchema.safeParse(draft);
-      if (!parsed.success) throw Object.assign(new Error('A URL and a model are required'), { status: 400 });
+      if (!parsed.success) throw createProblem('A URL and a model are required', 400);
       const key = parsed.data.key || (await store.readCustomEndpoint())?.key;
       source = 'custom';
-      endpoint = classifierEndpoint('custom', {
-        customEndpoint: { url: parseCustomEndpointUrl(parsed.data.url), model: parsed.data.model, ...(key ? { key } : {}) },
-      });
+      const draftEndpoint: CustomEndpoint = {
+        url: parseCustomEndpointUrl(parsed.data.url),
+        model: parsed.data.model,
+      };
+      if (key) draftEndpoint.key = key;
+      endpoint = classifierEndpoint('custom', { customEndpoint: draftEndpoint });
     } else {
       const access = await resolveAccess(scope, true);
       source = access.classifier.effective;
@@ -546,8 +839,13 @@ export function createRoutingRuntime({
       if (!isProbeAnswer(answers.probe)) return { ok: false, reason: 'unparsable', source, model: endpoint.model };
       return { ok: true, source, model: endpoint.model, ms };
     } catch (error) {
-      if (error?.code === 'timeout') return { ok: false, reason: 'timeout', source, model: endpoint.model };
-      if (typeof error?.status === 'number') return { ok: false, reason: 'http', status: error.status, source, model: endpoint.model };
+      const parsedError = routingAskErrorSchema.safeParse(error);
+      if (parsedError.success && parsedError.data.code === 'timeout') {
+        return { ok: false, reason: 'timeout', source, model: endpoint.model };
+      }
+      if (parsedError.success && parsedError.data.status !== undefined) {
+        return { ok: false, reason: 'http', status: parsedError.data.status, source, model: endpoint.model };
+      }
       if (error instanceof SyntaxError || /no answers/.test(errorMessage(error))) {
         return { ok: false, reason: 'unparsable', source, model: endpoint.model };
       }
@@ -555,17 +853,17 @@ export function createRoutingRuntime({
     }
   };
 
-  /** Resolve the endpoint for an authorized workspace, or null when no provider is usable. */
-  const currentClassifierEndpoint = async (workspaceId) => {
+  const currentClassifierEndpoint = async (workspaceId: string): Promise<ClassifierEndpoint | null> => {
     const scope = await scopeForWorkspace(workspaceId);
     return (await resolveAccess(scope, true)).endpoint;
   };
 
-  /** Held permissions the UI can read back after a reload. */
-  const heldPermissions = () => {
-    const held = [];
+  const heldPermissions = (): HeldPermissionSummary[] => {
+    const held: HeldPermissionSummary[] = [];
     for (const [permissionId, entry] of permissionDecisions) {
-      if (entry.result.action === 'hold') held.push({ permissionId, score: entry.result.score, kind: entry.result.kind });
+      if (entry.result.action === 'hold') {
+        held.push({ permissionId, score: entry.result.score ?? 0, kind: entry.result.kind ?? null });
+      }
     }
     return held;
   };

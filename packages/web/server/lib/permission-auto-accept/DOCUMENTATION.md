@@ -43,9 +43,9 @@ Events published by this module:
 - `openchamber:permission-auto-accept.updated` — `{ sessions, modes, revision }`.
 - `openchamber:permission-auto-accept.left-for-user` — `{ permissionId, sessionId, directory }`, emitted once per held safety request so the UI can explain why a card appeared.
 
-## Supervisor seam (`host-channel.js`)
+## Supervisor seam (`host-channel.ts`)
 
-The supervisor is constructed before this runtime and is built elsewhere, so it cannot import it. `host-channel.js` carries the registration instead:
+The supervisor is constructed before this runtime and is built elsewhere, so it cannot import it. `host-channel.ts` carries the registration instead:
 
 - `registerHostPermissionRuntime(runtime)` — called from `index.js` right after construction.
 - `resolveHostPermissionMode(sessionId)` — the mode this session's lineage resolves to.

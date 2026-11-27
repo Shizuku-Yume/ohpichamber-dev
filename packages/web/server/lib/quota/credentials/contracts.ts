@@ -1,4 +1,4 @@
-export type CredentialJson = null | boolean | number | string | CredentialJson[] | { [key: string]: CredentialJson };
+export type CredentialJson = null | boolean | number | string | CredentialJson[] | { [key: string]: CredentialJson | undefined };
 
 export interface ExeDevCredential {
   usageToken: string;

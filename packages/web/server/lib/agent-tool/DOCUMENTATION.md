@@ -68,7 +68,7 @@ session cannot keep writing.
 2. A call sends `worker.action.request` over the supervisor channel with the
    tool name, action, input and the session id.
 3. The Host validates the captured scope against the live session
-   (`worker-authorization-channel.js`), then applies the tool's feature policy
+   (`worker-authorization-channel.ts`), then applies the tool's feature policy
    and dispatches to the control service.
 4. The result returns as one JSON envelope (below). A cancelled turn cancels
    the action: the worker's abort signal reaches the Host request, and a

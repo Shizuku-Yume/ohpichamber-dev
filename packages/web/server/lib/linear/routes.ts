@@ -136,8 +136,6 @@ export function registerLinearRoutes(app: Application) {
     try {
       const libraries = await getLinearLibraries();
       const status = await readLinearAuthStatus(libraries);
-      // A server with no broker configured cannot start Linear's sign-in; say so
-      // rather than letting the UI draw a button that fails on click.
       if (libraries.isLinearSignInConfigured()) return res.json(status);
       return res.json({
         ...status,
@@ -160,14 +158,14 @@ export function registerLinearRoutes(app: Application) {
       const payload = await startAuthorization({ origin });
       return res.json(payload);
     } catch (error) {
-      // A user-fixable refusal (no client id, no broker) is 400 with the code that
-      // names the setting; anything else is this server's own failure.
-      const userFixable = error?.code === 'LINEAR_CLIENT_ID_MISSING' || error?.code === 'LINEAR_BROKER_NOT_CONFIGURED';
+      const userFixable = canReadRouteError(error)
+        && (error.code === 'LINEAR_CLIENT_ID_MISSING' || error.code === 'LINEAR_BROKER_NOT_CONFIGURED');
       if (!userFixable) console.error('Failed to start Linear authorization:', error);
-      return res.status(userFixable ? 400 : 500).json({
-        error: error.message || 'Failed to start Linear authorization',
-        ...(userFixable ? { code: error.code } : {}),
-      });
+      const message = routeErrorMessage(error) || 'Failed to start Linear authorization';
+      if (userFixable && canReadRouteError(error)) {
+        return res.status(400).json({ error: message, code: error.code });
+      }
+      return res.status(500).json({ error: message });
     }
   });
 

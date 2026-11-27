@@ -59,6 +59,27 @@ describe('commands-connect-url relay configuration', () => {
     ]);
   });
 
+  it('keeps privateRelay.enabled when the stored relayUrl is mistyped', async () => {
+    process.env.OPENCHAMBER_DATA_DIR = createTempDataDir({ privateRelay: { enabled: true, relayUrl: 42 } });
+    process.env.OPENCHAMBER_RELAY_URL = 'wss://relay.selfhosted.test/ws';
+    const serveCommand = vi.fn(async () => { });
+    let output = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      output += String(chunk);
+      return true;
+    });
+    const command = createConnectUrlCommand({ serveCommand });
+
+    await command({ port: 3000, server: 'http://192.168.1.20:3000', json: true });
+
+    // relayUrl: 42 degrades only itself — the pinned env relay still applies,
+    // and the valid enabled: true beside it must survive, so plain connect-url
+    // keeps advertising the relay candidate.
+    const payload = JSON.parse(output);
+    expect(payload.candidates).toHaveLength(2);
+    expect(payload.candidates[1]).toMatchObject({ type: 'relay', relayUrl: 'wss://relay.selfhosted.test/ws' });
+  });
+
   it('includes the configured relay candidate when OPENCHAMBER_RELAY_URL is set', async () => {
     process.env.OPENCHAMBER_DATA_DIR = createTempDataDir({});
     process.env.OPENCHAMBER_RELAY_URL = 'wss://relay.selfhosted.test/ws';

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { credentialAccessToken } from './selected-credential.js';
+import { credentialAccessToken, type SelectedCredentialInput } from './selected-credential.js';
 import { envelopeError } from './zhipuai-coding-plan.js';
 import { hasPayloadFields } from './zhipuai-coding-plan.js';
 
@@ -54,7 +54,7 @@ const pickZaiGiftReset = (records: readonly unknown[] | undefined): ZaiGiftReset
   return best;
 };
 
-export const listZaiGiftResets = async ({ credential }: { credential: unknown }): Promise<ZaiGiftResetList | null> => {
+export const listZaiGiftResets = async ({ credential }: { credential: SelectedCredentialInput }): Promise<ZaiGiftResetList | null> => {
   const apiKey = credentialAccessToken(credential);
   if (!apiKey) return null;
   try {
@@ -106,7 +106,7 @@ export const attachZaiGiftResets = (windows: Record<string, ZaiWindowBucket>, li
   if (list.weekly !== null) attachOne(windows, ZAI_WEEK_WINDOW_SECONDS, list.weekly);
 };
 
-export const useZaiGiftReset = async ({ recordId, resetType, credential }: { recordId: number; resetType: string; credential: unknown }) => {
+export const useZaiGiftReset = async ({ recordId, resetType, credential }: { recordId: number; resetType: string; credential: SelectedCredentialInput }) => {
   const apiKey = credentialAccessToken(credential);
 
   if (!apiKey) {

@@ -1,83 +1,62 @@
 import { hasErrorMessage, isJsonObject, isString } from './inputs.js';
+import { z } from 'zod';
 import type { JsonValue, SseWriter } from './contracts.js';
 import type { UpdateSettingsFromDisk } from '../settings/settings-write-queue.js';
 import type { createPushRuntime } from './push-runtime.js';
 import type { createSessionRuntime } from '../host/session-runtime.js';
-import type { IncomingHttpHeaders } from 'node:http';
+import type { Application, Request, Response } from '../shared/http-contracts.js';
 
-interface NotificationRequest {
-  body?: JsonValue;
-  params: { id: string };
-  headers: IncomingHttpHeaders;
-  on: (event: 'close', listener: () => void) => void;
+interface NativePushStatusResponse {
+  available: boolean;
+  reason: string | null;
+  relaySetting: string;
+  disabledSetting?: string;
 }
 
-interface NotificationResponse extends SseWriter {
-  setHeader: (name: string, value: string) => void;
-  status: (status: number) => NotificationResponse;
-  json: <Body>(body: Body) => void;
-  on: (event: 'error', listener: () => void) => void;
-  flushHeaders?: () => void;
-  flush?: () => void;
-  writableEnded: boolean;
-  destroyed: boolean;
-}
-
-type NotificationRouteHandler = (req: NotificationRequest, res: NotificationResponse) => void | Promise<void>;
 type SessionRuntime = ReturnType<typeof createSessionRuntime>;
 type PushRuntime = ReturnType<typeof createPushRuntime>;
 
-interface NotificationRouteDependencies extends Pick<PushRuntime,
-  'ensurePushInitialized' | 'getOrCreateVapidKeys' | 'addOrUpdatePushSubscription' | 'removePushSubscription' |
-  'updateUiVisibility' | 'isUiVisible' | 'setPushInitialized'>, Pick<SessionRuntime,
-  'getSessionActivitySnapshot' | 'getSessionStateSnapshot' | 'getSessionState'> {
-  uiAuthController?: { ensureSessionToken?: (req: NotificationRequest, res: NotificationResponse) => string | null | Promise<string | null> };
-  ensureGlobalWatcherStarted?: () => Promise<void>;
-  getUiSessionTokenFromRequest: (req: NotificationRequest) => string | null;
+export interface NotificationRouteDependencies extends Pick<PushRuntime,
+  'ensurePushInitialized' | 'getOrCreateVapidKeys' | 'addOrUpdatePushSubscription' | 'removePushSubscription'
+  | 'updateUiVisibility' | 'isUiVisible' | 'setPushInitialized'>, Pick<SessionRuntime,
+    'getSessionActivitySnapshot' | 'getSessionStateSnapshot' | 'getSessionState'> {
+  uiAuthController?: { ensureSessionToken?: (req: Request, res: Response) => string | null | Promise<string | null> } | null | undefined;
+  ensureGlobalWatcherStarted?: (() => Promise<void>) | undefined;
+  getUiSessionTokenFromRequest: (req: Request) => string | null;
   updateSettingsFromDisk: UpdateSettingsFromDisk;
-  addOrUpdateApnsToken?: (token: string, deviceToken: string, userAgent: string | undefined, platform: string, environment: string, pushKey: JsonValue | undefined) => Promise<void>;
-  removeApnsToken?: (token: string, deviceToken: string) => Promise<void>;
-  clearPendingPushBadge?: () => void;
-  clearSessionPushNotifications?: (sessionId: string, options?: { viewed?: boolean }) => Promise<void>;
-  getUiNotificationClients: () => Set<NotificationResponse>;
+  addOrUpdateApnsToken?: ((token: string, deviceToken: string, userAgent: string | undefined, platform: string, environment: string, pushKey: JsonValue | undefined) => Promise<void>) | undefined;
+  removeApnsToken?: ((token: string, deviceToken: string) => Promise<void>) | undefined;
+  resolveApnsStatus?: (() => Promise<{ available: boolean; reason: string | null }>) | undefined;
+  clearPendingPushBadge?: (() => void) | undefined;
+  clearSessionPushNotifications?: ((sessionId: string, options?: { viewed?: boolean }) => Promise<void>) | undefined;
+  getUiNotificationClients: () => Set<Response>;
   writeSseEvent: (res: SseWriter, payload: { type: string; properties: { uiToken: string } }) => void;
-  getPendingBlockingRequestsSnapshot?: SessionRuntime['getPendingBlockingRequestsSnapshot'];
-  getSessionContextSnapshot?: SessionRuntime['getSessionContextSnapshot'];
-  setAutoAcceptSession?: (sessionId: string, enabled: boolean) => void;
-  isLocalOnlyPushRequest?: (req: NotificationRequest, uiToken: string) => boolean | Promise<boolean>;
+  getPendingBlockingRequestsSnapshot?: SessionRuntime['getPendingBlockingRequestsSnapshot'] | undefined;
+  getSessionContextSnapshot?: (() => JsonValue) | undefined;
+  setAutoAcceptSession?: ((sessionId: string, enabled: boolean) => void) | undefined;
+  isLocalOnlyPushRequest?: ((req: Request, uiToken: string) => boolean | Promise<boolean>) | undefined;
 }
 
-const parsePushSubscribeBody = (body: JsonValue | undefined) => {
-  if (!isJsonObject(body)) return null;
-  const endpoint = body.endpoint;
-  const keys = body.keys;
-  const p256dh = isJsonObject(keys) ? keys.p256dh : undefined;
-  const auth = isJsonObject(keys) ? keys.auth : undefined;
+const isCallable = (value: unknown): value is () => Promise<{ available: boolean; reason: string | null }> => typeof value === 'function';
 
-  if (!isString(endpoint) || endpoint.trim().length === 0) return null;
-  if (!isString(p256dh) || p256dh.trim().length === 0) return null;
-  if (!isString(auth) || auth.trim().length === 0) return null;
+const pushSubscribeBodySchema = z.object({
+  endpoint: z.string().trim().min(1),
+  keys: z.object({
+    p256dh: z.string().trim().min(1),
+    auth: z.string().trim().min(1),
+  }),
+});
 
-  return {
-    endpoint: endpoint.trim(),
-    keys: { p256dh: p256dh.trim(), auth: auth.trim() },
-  };
-};
-
-const parsePushUnsubscribeBody = (body: JsonValue | undefined) => {
-  if (!isJsonObject(body)) return null;
-  const endpoint = body.endpoint;
-  if (!isString(endpoint) || endpoint.trim().length === 0) return null;
-  return { endpoint: endpoint.trim() };
-};
+const pushUnsubscribeBodySchema = z.object({
+  endpoint: z.string().trim().min(1),
+});
 
 export const NOTIFICATION_SSE_HEARTBEAT_INTERVAL_MS = 20_000;
 
-/** The settings that turn native push on, named in the UI's unavailable copy. */
 const NATIVE_PUSH_RELAY_SETTING = 'OPENCHAMBER_PUSH_RELAY_URL';
 const NATIVE_PUSH_RELAY_DISABLED_SETTING = 'OPENCHAMBER_PUSH_RELAY_DISABLED';
 
-export const registerNotificationRoutes = (app, dependencies) => {
+export const registerNotificationRoutes = (app: Pick<Application, 'get' | 'post' | 'delete'>, dependencies: NotificationRouteDependencies) => {
   const {
     uiAuthController,
     ensurePushInitialized,
@@ -134,25 +113,23 @@ export const registerNotificationRoutes = (app, dependencies) => {
     }
   };
 
-  // Whether this server can deliver remote iOS/Android push at all, and why not.
-  // A client reads this instead of guessing: with no relay URL and no direct APNs
-  // key the server sends nothing, and the settings page says so.
   app.get('/api/push/native-status', async (_req, res) => {
-    if (typeof resolveApnsStatus !== 'function') {
+    if (!isCallable(resolveApnsStatus)) {
       return res.status(404).json({ error: 'Native push status is unavailable' });
     }
     try {
       const status = await resolveApnsStatus();
-      return res.json({
+      const payload: NativePushStatusResponse = {
         available: status.available === true,
         reason: status.reason ?? null,
         relaySetting: NATIVE_PUSH_RELAY_SETTING,
-        ...(status.reason === 'direct-config-missing'
-          ? { disabledSetting: NATIVE_PUSH_RELAY_DISABLED_SETTING }
-          : {}),
-      });
+      };
+      if (status.reason === 'direct-config-missing') {
+        payload.disabledSetting = NATIVE_PUSH_RELAY_DISABLED_SETTING;
+      }
+      return res.json(payload);
     } catch (error) {
-      console.warn('[Push] Failed to read native push status:', error?.message ?? error);
+      console.warn('[Push] Failed to read native push status:', hasErrorMessage(error) ? error.message ?? error : error);
       return res.status(500).json({ error: 'Failed to read native push status' });
     }
   });
@@ -179,12 +156,12 @@ export const registerNotificationRoutes = (app, dependencies) => {
       return res.status(401).json({ error: 'UI session missing' });
     }
 
-    const parsed = parsePushSubscribeBody(req.body);
-    if (!parsed) {
+    const parsed = pushSubscribeBodySchema.safeParse(req.body);
+    if (!parsed.success) {
       return res.status(400).json({ error: 'Invalid body' });
     }
 
-    const { endpoint, keys } = parsed;
+    const { endpoint, keys } = parsed.data;
 
     const body = isJsonObject(req.body) ? req.body : {};
     const origin = isString(body.origin) ? body.origin.trim() : '';
@@ -217,12 +194,12 @@ export const registerNotificationRoutes = (app, dependencies) => {
       return res.status(401).json({ error: 'UI session missing' });
     }
 
-    const parsed = parsePushUnsubscribeBody(req.body);
-    if (!parsed) {
+    const parsed = pushUnsubscribeBodySchema.safeParse(req.body);
+    if (!parsed.success) {
       return res.status(400).json({ error: 'Invalid body' });
     }
 
-    await removePushSubscription(uiToken, parsed.endpoint);
+    await removePushSubscription(uiToken, parsed.data.endpoint);
     return res.json({ ok: true });
   });
 
@@ -402,7 +379,7 @@ export const registerNotificationRoutes = (app, dependencies) => {
 
   app.get('/api/sessions/:id/status', async (req, res) => {
     await ensureSessionWatcher();
-    const sessionId = req.params.id;
+    const sessionId = req.params.id ?? '';
     const state = getSessionState(sessionId);
 
     if (!state) {
@@ -419,7 +396,7 @@ export const registerNotificationRoutes = (app, dependencies) => {
   });
 
   app.post('/api/sessions/:id/view', (req, res) => {
-    const sessionId = req.params.id;
+    const sessionId = req.params.id ?? '';
     if (clearPendingPushBadge) clearPendingPushBadge();
     void clearSessionPushNotifications?.(sessionId, { viewed: true });
 
@@ -431,7 +408,7 @@ export const registerNotificationRoutes = (app, dependencies) => {
   });
 
   app.post('/api/sessions/:id/message-sent', (req, res) => {
-    const sessionId = req.params.id;
+    const sessionId = req.params.id ?? '';
     if (clearPendingPushBadge) clearPendingPushBadge();
     void clearSessionPushNotifications?.(sessionId);
 

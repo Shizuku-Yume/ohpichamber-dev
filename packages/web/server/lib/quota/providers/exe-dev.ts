@@ -1,5 +1,7 @@
+import { z } from 'zod';
+import type { ExeDevCredential } from '../credentials/contracts.js';
+import type { ProviderUsage, QuotaResult } from '../utils/contracts.js';
 import { asObject, buildResult, formatMoney, toNumber, toTimestamp, toUsageWindow } from '../utils/index.js';
-import { z } from "zod";
 
 
 interface ExeDevFields {
@@ -62,12 +64,12 @@ export const fetchExeDevUsage = async (credential: ExeDevCredential, fetchImpl =
   return windows;
 };
 
-export const isConfigured = () => false;
+export const isConfigured = (): boolean => false;
 
-export const fetchQuota = async () => buildResult({
+export const fetchQuota = async (): Promise<QuotaResult<string, string, ProviderUsage>> => buildResult({
   providerId,
   providerName,
   ok: false,
   configured: false,
-  error: 'Selected credential quota is unsupported for exe.dev'
+  error: 'Selected credential quota is unsupported for exe.dev',
 });

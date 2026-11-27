@@ -9,7 +9,6 @@ import {
 import type { KeyObject } from 'node:crypto';
 import type { ClientHttp2Session, OutgoingHttpHeaders } from 'node:http2';
 import type { RelayKeyStore, RelayPublicJwk } from '../relay/key-store.js';
-import type { RelaySigningKeypair } from '../relay/signing-key.js';
 import type { JsonValue, SessionRecords } from './contracts.js';
 import type { PushContent } from './push-seal.js';
 import { hasErrorProperties, isIncludesMessage, isJsonObject, isMissingFile, isNumber, isSessionRecords, isString } from './inputs.js';
@@ -153,18 +152,15 @@ export const createApnsRuntime = (deps: ApnsDependencies) => {
 
   let persistLock: Promise<void | ApnsStore> = Promise.resolve();
   let legacyKeysScrubQueued = false;
-  let cachedJwt = null; // { token, issuedAtMs, keyId }
-  let cachedRelayKey = null; // { generation, keypair: { privateKey, publicJwk } }
+  let cachedJwt: { token: string; issuedAtMs: number; keyId: string } | null = null;
+  let cachedRelayKey: { generation: number; keypair: Awaited<ReturnType<typeof getOrCreateRelaySigningKeypair>> } | null = null;
   let warnedUnavailable = false;
   let warnedUnconfigured = false;
 
-  // Why remote push cannot be delivered here, in the words the settings page
-  // shows. There is no built-in relay: without OPENCHAMBER_PUSH_RELAY_URL (and
-  // without direct APNs keys) nothing leaves this machine.
   const resolveUnavailableReason = () =>
-    (trimmedEnv('OPENCHAMBER_PUSH_RELAY_DISABLED') === 'true' ? 'direct-config-missing' : 'relay-url-missing');
+  (trimmedEnv('OPENCHAMBER_PUSH_RELAY_DISABLED') === 'true' ? 'direct-config-missing' : 'relay-url-missing');
 
-  const warnUnavailableOnce = (reason) => {
+  const warnUnavailableOnce = (reason: 'direct-config-missing' | 'relay-url-missing') => {
     if (warnedUnavailable) return;
     warnedUnavailable = true;
     console.warn(
@@ -280,7 +276,7 @@ export const createApnsRuntime = (deps: ApnsDependencies) => {
       await writeTokensToDisk(next);
       return next;
     });
-    persistLock = result.catch(() => {});
+    persistLock = result.catch(() => { });
     return result;
   };
 
@@ -696,8 +692,6 @@ export const createApnsRuntime = (deps: ApnsDependencies) => {
     }
     const directConfig = await resolveApnsConfig();
     if (!directConfig) {
-      // Nothing to deliver through: no relay URL and no direct APNs key. Say so
-      // once — the settings page shows the same reason — and leave the network alone.
       warnUnavailableOnce(resolveUnavailableReason());
       return;
     }
@@ -784,7 +778,6 @@ export const createApnsRuntime = (deps: ApnsDependencies) => {
     clearApnsNotifications,
     resolveApnsConfig,
     resolveApnsStatus,
-    // exposed for tests
     signApnsJwt,
   };
 };

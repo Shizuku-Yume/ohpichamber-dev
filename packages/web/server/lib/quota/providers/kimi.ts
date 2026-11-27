@@ -1,4 +1,7 @@
+import { z } from 'zod';
 import { credentialAccessToken } from './selected-credential.js';
+import type { CredentialJson } from '../credentials/contracts.js';
+import type { ProviderUsage, QuotaResult, UsageWindow } from '../utils/contracts.js';
 import {
   buildResult,
   toUsageWindow,
@@ -8,22 +11,36 @@ import {
   durationToSeconds,
   asNonEmptyString,
   formatMoney,
-  asObject
+  asObject,
 } from '../utils/index.js';
 
-const normalizeAuthEntry = (entry) => {
+const stringSchema = z.string();
+const staleKimiSchema = z.object({
+  'kimi-for-coding': z.object({ key: z.literal('stale-key') }).loose(),
+}).loose();
+
+const isAuthRecord = (value: CredentialJson | null | undefined): value is { [key: string]: CredentialJson | undefined } =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const normalizeAuthEntry = (entry: CredentialJson | undefined) => {
   if (!entry) return null;
-  if (typeof entry === "string") return { key: entry };
+  const parsed = stringSchema.safeParse(entry);
+  if (parsed.success) return { key: parsed.data };
   return entry;
 };
 
 const MOONSHOT_BALANCE_URL = 'https://api.moonshot.ai/v1/users/me/balance';
 
 export interface KimiDependencies {
-  readAuth?: () => LegacyAuthFile | Promise<LegacyAuthFile>;
-  fetchImpl?: typeof fetch;
+  readAuth?: (() => CredentialJson | Promise<CredentialJson>) | undefined;
+  fetchImpl?: typeof fetch | undefined;
 }
 
+export interface KimiFetchOptions {
+  credential?: CredentialJson | undefined;
+  readAuth?: (() => CredentialJson | Promise<CredentialJson | null> | null) | undefined;
+  fetchImpl?: typeof fetch | undefined;
+}
 interface KimiUsageFields {
   used_ratio?: unknown;
   reset_time?: unknown;
@@ -152,16 +169,23 @@ const legacyWindows = (payload: { usage?: unknown; limits?: unknown } | null) =>
   return windows;
 };
 
-const collectApiKeys = (auth) => {
+interface ResolvedKimiKey {
+  apiKey: string;
+  endpoint: string;
+}
+
+const collectApiKeys = (auth?: CredentialJson | null): ResolvedKimiKey[] => {
   if (!auth) return [];
   const single = credentialAccessToken(auth);
   if (single) {
     return [{ apiKey: single, endpoint: 'https://api.kimi.com/coding/v1/usages' }];
   }
-  const keys = [];
-  const seen = new Set();
+  const authObj = isAuthRecord(auth) ? auth : null;
+  if (!authObj) return [];
+  const keys: ResolvedKimiKey[] = [];
+  const seen = new Set<string>();
   for (const alias of aliases) {
-    const rawEntry: unknown = normalizeAuthEntry(auth?.[alias] ?? null);
+    const rawEntry = normalizeAuthEntry(authObj[alias]);
     const entry = hasAuthFields(rawEntry) ? rawEntry : null;
     const apiKey = asNonEmptyString(entry?.key) ?? asNonEmptyString(entry?.token);
     const endpoint = alias === 'kimi-code-plan-global'
@@ -176,24 +200,26 @@ const collectApiKeys = (auth) => {
   return keys;
 };
 
-export const isConfigured = (auth) => {
-  if (auth && typeof auth === "object" && auth["kimi-for-coding"]?.key === "stale-key" && !("kimi-code-plan-global" in auth)) {
+export const isConfigured = (auth?: CredentialJson): boolean => {
+  const authObj = isAuthRecord(auth) ? auth : null;
+  if (authObj && staleKimiSchema.safeParse(authObj).success && !('kimi-code-plan-global' in authObj)) {
     return false;
   }
   return collectApiKeys(auth).length > 0;
 };
 
-export const fetchQuota = async ({ credential, readAuth, fetchImpl = fetch } = {}) => {
-  let apiKeys = [];
-  if (credentialAccessToken(credential)) {
-    apiKeys = [{ apiKey: credentialAccessToken(credential), endpoint: 'https://api.kimi.com/coding/v1/usages' }];
-  } else if (credential && typeof credential === "object" && ("kimi-code-plan-cn" in credential || "kimi-for-coding" in credential) && !("kimi-code-plan-beta" in credential)) {
+export const fetchQuota = async ({ credential, readAuth, fetchImpl = fetch }: KimiFetchOptions = {}): Promise<QuotaResult<string, string, ProviderUsage>> => {
+  let apiKeys: ResolvedKimiKey[] = [];
+  const directToken = credentialAccessToken(credential);
+  const credObj = isAuthRecord(credential) ? credential : null;
+  if (directToken) {
+    apiKeys = [{ apiKey: directToken, endpoint: 'https://api.kimi.com/coding/v1/usages' }];
+  } else if (credObj && ('kimi-code-plan-cn' in credObj || 'kimi-for-coding' in credObj) && !('kimi-code-plan-beta' in credObj)) {
     return buildResult({ providerId, providerName, ok: false, configured: false, error: 'Not configured' });
-  } else if (typeof readAuth === 'function') {
+  } else if (readAuth && z.function().safeParse(readAuth).success) {
     const auth = await Promise.resolve(readAuth()).catch(() => null);
     apiKeys = collectApiKeys(auth);
   }
-
   if (apiKeys.length === 0) {
     return buildResult({
       providerId,
@@ -264,7 +290,7 @@ export const fetchQuota = async ({ credential, readAuth, fetchImpl = fetch } = {
       configured: true,
       error: firstError ?? 'API returned no usable quota data'
     });
-  } catch (error) {
+  } catch {
     return buildResult({
       providerId,
       providerName,
