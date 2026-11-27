@@ -595,12 +595,12 @@ export class WorkerSession {
       api.on('tool_result', event => { interaction.forgetToolCall(event.toolCallId); });
       api.on('tool_approval_resolved', event => { interaction.forgetToolCall(event.toolCallId, false); });
     };
-    const mcpCredentials = new NativeMcpCredentials(authStorage, input.workspaceId);
+    const mcpCredentials = new NativeMcpCredentials(authStorage, input.workspaceId, join(input.agentDirectory, 'mcp.json'));
     const mcp = input.mcpConfigPath ? new WorkerMcp({
       cwd: input.cwd, configPath: input.mcpConfigPath,
       userConfigPath: join(input.agentDirectory, 'mcp.json'),
       worker, authStorage,
-      resolveCredentialRef: reference => mcpCredentials.resolve(reference),
+      resolveCredentialRef: (reference, scope) => mcpCredentials.resolve(reference, { scope }),
       // authorizeServer already checked the Host-resolved command before this resolver is called.
       resolveCommand: async transport => transport.command,
       authorizeServer: (server, proposed) => authorize({ type: 'mcp-server', server, ...(proposed ? { proposed: true } : {}) }),

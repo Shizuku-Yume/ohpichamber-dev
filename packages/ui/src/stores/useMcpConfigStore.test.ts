@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { toast } from 'sonner';
 import type { MCPApplyResult, MCPConfigurationState, MCPConfigureRequest, MCPServerConfig } from '@openchamber/agent-contract';
 import { MCPApplyResultSchema } from '@openchamber/agent-contract';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -7,6 +8,7 @@ const server: MCPServerConfig = { serverId: 'tools', label: 'Tools', enabled: tr
 let current: MCPConfigurationState;
 let readFailure: Error | null;
 let writeFailure: Error | null;
+let applyResultExtras: Partial<MCPApplyResult>;
 let captured: MCPConfigureRequest[];
 let pendingRead: Promise<MCPConfigurationState> | null;
 const realClient = await import('@/api/canonicalClient');
@@ -27,7 +29,7 @@ mock.module('@/api/canonicalClient', () => ({
         throw writeFailure;
       }
       current = { ...current, persistedRevision: String(BigInt(current.persistedRevision) + 1n), config: request.config };
-      return { kind: 'mcp', status: 'no-active-workers', outcome: 'applied', configuration: current, workers: [] };
+      return { kind: 'mcp', status: 'no-active-workers', outcome: 'applied', configuration: current, workers: [], ...applyResultExtras };
     },
     applyWorkspaceMcp: async (): Promise<MCPApplyResult> => ({ kind: 'mcp', status: 'no-active-workers', outcome: 'applied', configuration: current, workers: [] }),
   }
@@ -37,6 +39,7 @@ const { useMcpConfigStore } = await import('./useMcpConfigStore');
 beforeEach(() => {
   useMcpConfigStore.getState().resetForRuntimeSwitch();
   current = { workspaceId: 'workspace', persistedRevision: '4', config: { servers: [server] } };
+  applyResultExtras = {};
   captured = []; readFailure = null; writeFailure = null; pendingRead = null; resolveWorkspace.mockClear();
 });
 describe('workspace MCP configuration consumers', () => {
@@ -140,5 +143,55 @@ describe('workspace MCP configuration consumers', () => {
     } finally {
       useDirectoryStore.setState({ currentDirectory: '' });
     }
+  });
+  test('a save whose unchanged entries lost their credential resolution warns with the entry display names', async () => {
+    const warning = spyOn(toast, 'warning').mockImplementation(() => 'warning');
+    try {
+      current = { workspaceId: 'workspace', persistedRevision: '4', config: { servers: [{ ...server, serverId: 'grafana-main', label: 'Grafana' }] } };
+      applyResultExtras = { needsCredentialReentry: ['grafana-main'] };
+      await useMcpConfigStore.getState().loadMcpConfigs({ directory: '/repo' });
+      const result = await useMcpConfigStore.getState().updateMcp('grafana-main', { enabled: false }, '/repo');
+      expect(result.ok).toBe(true);
+      expect(warning).toHaveBeenCalledTimes(1);
+      const message = String(warning.mock.calls[0]?.[0]);
+      // The label, not the id: the user re-enters the entry they can see.
+      expect(message).toContain('Grafana');
+      expect(message).not.toContain('grafana-main');
+    } finally {
+      warning.mockRestore();
+    }
+  });
+  test('a save carrying no unresolved entries does not warn', async () => {
+    const warning = spyOn(toast, 'warning').mockImplementation(() => 'warning');
+    try {
+      await useMcpConfigStore.getState().loadMcpConfigs({ directory: '/repo' });
+      expect((await useMcpConfigStore.getState().updateMcp('tools', { enabled: false }, '/repo')).ok).toBe(true);
+      expect(warning).not.toHaveBeenCalled();
+    } finally {
+      warning.mockRestore();
+    }
+  });
+  test('a 403 refusal for a newly written credential names the entry by its display label', async () => {
+    current = { workspaceId: 'workspace', persistedRevision: '4', config: { servers: [{ ...server, serverId: 'grafana-main', label: 'Grafana' }] } };
+    await useMcpConfigStore.getState().loadMcpConfigs({ directory: '/repo' });
+    writeFailure = new CanonicalApiError({
+      type: 'urn:ohpichamber:problem:UNAUTHORIZED', title: 'Unauthorized', status: 403,
+      detail: 'A stored credential is missing or does not belong to this workspace for grafana-main. Re-enter its value to save this configuration.',
+      code: 'UNAUTHORIZED', retryable: false, details: { servers: ['grafana-main'] },
+    });
+    const result = await useMcpConfigStore.getState().updateMcp('grafana-main', { enabled: false }, '/repo');
+    if (result.ok) throw new Error('the refusal must not succeed');
+    expect(result.error).toContain('Grafana');
+    expect(result.error).not.toContain('grafana-main');
+  });
+  test('a refusal without the servers entry list keeps the server-written cause', async () => {
+    await useMcpConfigStore.getState().loadMcpConfigs({ directory: '/repo' });
+    writeFailure = new CanonicalApiError({
+      type: 'urn:ohpichamber:problem:MCP_APPLY_FAILED', title: 'Apply failed', status: 503,
+      detail: 'ECONNREFUSED', code: 'MCP_APPLY_FAILED', retryable: true,
+    });
+    const result = await useMcpConfigStore.getState().updateMcp('tools', { enabled: false }, '/repo');
+    if (result.ok) throw new Error('the refusal must not succeed');
+    expect(result.error).toBe('ECONNREFUSED');
   });
 });

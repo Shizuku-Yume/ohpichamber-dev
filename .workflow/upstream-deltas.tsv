@@ -6616,3 +6616,7 @@ vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-tui-18.8.9.tgz	fork-only	omp-boundary		
 vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-utils-18.8.9.tgz	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-wire-18.8.9.tgz	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
 vendor/omp/c9de2b02/tarballs/oh-my-pi-snapcompact-18.8.9.tgz	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/agent-service/src/supervisor/catalog-helpers.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/agent-service/src/supervisor/service-http.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/agent-service/src/worker/mcp-errors.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.
+packages/agent-service/src/worker/mcp-user-file.ts	fork-only	omp-boundary		Canonical/Host/OMP implementation retained.

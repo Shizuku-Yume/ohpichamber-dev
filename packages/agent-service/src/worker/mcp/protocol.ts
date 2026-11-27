@@ -36,7 +36,7 @@ export type McpOperation = z.infer<typeof McpOperationSchema>;
 
 export const McpResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('catalog'), catalog: MCPCatalogReadSchema }),
-  z.strictObject({ type: z.literal('persisted'), configuration: MCPConfigurationStateSchema }),
+  z.strictObject({ type: z.literal('persisted'), configuration: MCPConfigurationStateSchema, needsCredentialReentry: z.array(EntityIdSchema).min(1).optional() }),
   z.strictObject({ type: z.literal('applied'), result: MCPWorkerApplyOutcomeSchema }),
   z.strictObject({ type: z.literal('oauth'), result: MCPOAuthResultSchema }),
   z.strictObject({ type: z.literal('tested'), result: MCPConnectionTestResultSchema }),
