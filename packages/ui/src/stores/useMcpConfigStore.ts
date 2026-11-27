@@ -4,6 +4,7 @@ import { devtools } from 'zustand/middleware';
 import { MCPApplyResultSchema, MCPServerConfigSchema, type MCPApplyResult, type MCPConfigurationState, type MCPServerConfig } from '@openchamber/agent-contract';
 import { canonicalClient, CanonicalApiError } from '@/api/canonicalClient';
 import { problemMessage } from '@/lib/problemMessage';
+import { notifyMcpCredentialReentry, describeMcpCredentialReentryRefusal } from '@/lib/mcpCredentialReentryNotice';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
 type McpDraft = MCPServerConfig;
@@ -70,6 +71,7 @@ export const useMcpConfigStore = create<McpConfigStore>()(devtools((set, get) =>
       if (result) next.applyResultsByDirectory = { ...state.applyResultsByDirectory, [directory]: result };
       return next;
     });
+    if (result) notifyMcpCredentialReentry(result);
   };
   const mutate = async (directory: string | null | undefined, transform?: (servers: MCPServerConfig[]) => MCPServerConfig[]): Promise<McpMutationResult> => {
     const ownerGeneration = generation;
@@ -96,7 +98,11 @@ export const useMcpConfigStore = create<McpConfigStore>()(devtools((set, get) =>
       const failureDetail = result.workers.find(worker => worker.outcome === 'failed')?.error.detail || 'The MCP server could not connect.';
       return { ok: false, error: failureDetail, result, outcome };
     } catch (error) {
-      const message = problemMessage(error, 'The MCP configuration could not be saved.');
+      const knownServers = (key ? get().configurationsByDirectory[key]?.config.servers : undefined) ?? [];
+      const reentryRefusal = error instanceof CanonicalApiError && error.problem.status === 403
+        ? describeMcpCredentialReentryRefusal(error.problem.details, knownServers)
+        : undefined;
+      const message = reentryRefusal ?? problemMessage(error, 'The MCP configuration could not be saved.');
       const parsed = error instanceof CanonicalApiError ? MCPApplyResultSchema.safeParse(error.problem.details?.result) : null;
       const result = parsed?.success && parsed.data.configuration.workspaceId === workspaceId ? parsed.data : undefined;
       // A rejected apply still advanced the persisted revision: adopt it as the next CAS baseline.

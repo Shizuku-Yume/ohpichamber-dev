@@ -1,6 +1,7 @@
 import { dirname, join } from 'node:path';
 import { NativeProviderOAuth } from './provider-oauth.ts';
 import { CounterSchema, PositiveCounterSchema, JsonObjectSchema, MCPOAuthPublicConfigurationSchema, MCPConfigurationStateSchema, type MCPConfigurationState, type ToolCatalogEntry } from '@openchamber/agent-contract';
+import { stableStringifyJson } from '@oh-my-pi/pi-utils/json';
 import { BUILTIN_TOOL_NAMES } from '@oh-my-pi/pi-coding-agent/tools/builtin-names';
 import {
   BUILTIN_TOOLS, HIDDEN_TOOLS,
@@ -63,7 +64,7 @@ export class StatelessWorker {
     this.oauth = new NativeProviderOAuth(runtime.authStorage, input.workerGeneration);
     this.webSearch = new NativeWebSearch(runtime, input.workspaceId, authorize);
     this.settingsStore = new NativeSettings(runtime.settings, input.agentDirectory);
-    this.mcpCredentials = new NativeMcpCredentials(runtime.authStorage, input.workspaceId);
+    this.mcpCredentials = new NativeMcpCredentials(runtime.authStorage, input.workspaceId, join(input.agentDirectory, 'mcp.json'));
     this.fileResources = new NativeFileResources({
       cwd: input.cwd, agentDirectory: input.agentDirectory, settings: runtime.settings,
       get extensionRoots() { return nativeExtensionRoots(runtime.settings); },
@@ -74,7 +75,7 @@ export class StatelessWorker {
       userConfigPath: join(input.agentDirectory, 'mcp.json'),
       authStorage: runtime.authStorage,
       worker: { rootSessionId: input.authorizationRootId, workspaceId: input.workspaceId, workerGeneration: input.workerGeneration },
-      resolveCredentialRef: reference => this.mcpCredentials.resolve(reference),
+      resolveCredentialRef: (reference, scope) => this.mcpCredentials.resolve(reference, { scope }),
       resolveCommand: async transport => transport.command,
       authorizeServer: (server, proposed) => authorize(
         proposed
@@ -208,20 +209,60 @@ export class StatelessWorker {
       const path = this.input.mcpConfigPath;
       if (!path) throw new ProjectionError(503, 'MCP_CONFIG_WRITE_FAILED', 'MCP storage ownership is unavailable');
       if (configuration.workspaceId !== this.input.workspaceId) throw new ProjectionError(403, 'UNAUTHORIZED', 'MCP workspace does not match worker identity');
-      const current = await this.readConfiguration();
+      const userPath = join(this.input.agentDirectory, 'mcp.json');
+      const hasUserServers = configuration.config.servers.some(server => server.scope === 'user');
+      let userFileAvailable = true;
+      let current: MCPConfigurationState | null;
+      try {
+        current = await this.readConfiguration();
+      } catch (error) {
+        if (hasUserServers || !(error instanceof NativeMcpError && error.code === 'MCP_CONFIG_READ_FAILED')) throw error;
+        current = await readNativeMcpConfigurationIfPresent(path, this.input.workspaceId);
+        userFileAvailable = false;
+      }
       const previousRevision = current?.persistedRevision ?? '0';
       if (request.expectedPersistedRevision !== previousRevision
         || BigInt(configuration.persistedRevision) !== BigInt(previousRevision) + 1n
         || JSON.stringify(configuration.config) !== JSON.stringify(request.config)) {
         throw new NativeMcpError('CATALOG_CONFLICT', 'MCP configuration revision changed.', false);
       }
+      const unresolvable = new Set<string>();
       for (const server of configuration.config.servers) {
         await this.authorize({ type: 'mcp-server', server, proposed: true });
         const references = server.transport.type === 'stdio' ? Object.values(server.transport.envCredentialRefs ?? {})
           : [...Object.values(server.transport.headerCredentialRefs ?? {}), ...(server.transport.credentialRef ? [server.transport.credentialRef] : [])];
-        for (const reference of references) await this.mcpCredentials.resolve(reference);
+        let failed = false;
+        for (const reference of references) {
+          try { await this.mcpCredentials.resolve(reference, { scope: server.scope }); }
+          catch (error) {
+            if (error instanceof ProjectionError && (error.status === 403 || server.scope === 'user')) { failed = true; break; }
+            throw error;
+          }
+        }
+        if (failed) unresolvable.add(server.serverId);
       }
-      return { type: 'mcp', result: { type: 'persisted', configuration: await writeNativeMcpConfiguration(path, configuration, join(this.input.agentDirectory, 'mcp.json')) } };
+      let needsCredentialReentry: string[] | undefined;
+      if (unresolvable.size > 0) {
+        const previous = new Map((current?.config.servers ?? []).map(server => [server.serverId, server]));
+        const newlyWritten: string[] = [];
+        const unchanged: string[] = [];
+        for (const serverId of unresolvable) {
+          const server = configuration.config.servers.find(candidate => candidate.serverId === serverId);
+          const before = previous.get(serverId);
+          if (server !== undefined && before !== undefined && stableStringifyJson(before) === stableStringifyJson(server)) unchanged.push(serverId);
+          else newlyWritten.push(serverId);
+        }
+        if (newlyWritten.length > 0) {
+          throw new ProjectionError(403, 'UNAUTHORIZED',
+            `A stored credential is missing or does not belong to this workspace for ${newlyWritten.join(', ')}. Re-enter its value to save this configuration.`,
+            { servers: newlyWritten });
+        }
+        needsCredentialReentry = unchanged;
+      }
+      const written = await writeNativeMcpConfiguration(path, configuration, userFileAvailable ? userPath : undefined);
+      const result = { type: 'persisted' as const, configuration: written };
+      if (needsCredentialReentry === undefined) return { type: 'mcp', result };
+      return { type: 'mcp', result: { ...result, needsCredentialReentry } };
     }
     if (operation.type === 'mcp') {
       if (!this.mcp) throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP storage ownership is unavailable.', true);
@@ -239,7 +280,7 @@ export class StatelessWorker {
           const server = configuration.config.servers.find(candidate => candidate.serverId === request.serverId);
           if (!server) throw new NativeMcpError('CATALOG_CONFLICT', 'MCP server is not configured.', false);
           await this.authorize({ type: 'mcp-server', server });
-          return { type: 'mcp', result: { type: 'secret.written', result: await this.mcpCredentials.write(request.serverId, configuration.persistedRevision, request.request.value) } };
+          return { type: 'mcp', result: { type: 'secret.written', result: await this.mcpCredentials.write(request.serverId, configuration.persistedRevision, request.request.value, { scope: server.scope }) } };
         }
         default: throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'MCP operation requires a live session worker');
       }
