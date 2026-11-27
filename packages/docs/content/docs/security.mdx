@@ -32,6 +32,7 @@ Devices paired through [Connect a Device](/connect-devices/) authenticate with t
 ## Before you expose it
 
 - By default OhPiChamber only listens on your own machine (`127.0.0.1`). It takes a deliberate change to listen more widely, and you should set a password first.
+- The same goes for the shutdown endpoint: without a password, anything that can reach the listener can stop the server, not only read it.
 - For your own devices, prefer [pairing](/connect-devices/) with the [Private Relay](/private-relay/) — nothing is exposed publicly at all.
 - If you need a public URL, prefer a [tunnel](/tunnels/) or a private network (like a VPN) over opening a port to the internet.
 - If you put OhPiChamber behind your own HTTPS server, see [Reverse Proxy](/reverse-proxy/).

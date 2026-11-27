@@ -21,6 +21,8 @@ describe('core-routes', () => {
       openchamberVersion: '1.0.0',
       runtimeName: 'test',
       express,
+      tunnelAuthController: { classifyRequestScope: () => 'local' },
+      uiAuthController: { requireAuth: (_req, _res, next) => next() },
     };
 
     registerServerStatusRoutes(app, dependencies);
@@ -843,8 +845,29 @@ describe('core-routes', () => {
       expect(dependencies.process.exit).not.toHaveBeenCalled();
     });
 
-    it('admits a loopback peer when no auth is configured', async () => {
+    it('refuses even a loopback peer when no auth controller is wired at all', async () => {
+      // Defense in depth: shutdown never fails open. Production always wires the
+      // auth controllers, so an absent controller means a wiring defect, and the
+      // one-shot kill primitive must stay closed rather than guess.
       const { app, dependencies } = createDevShutdownApp();
+
+      await postDevShutdown(app).expect(403, { error: 'Shutdown requires authentication' });
+
+      expect(dependencies.gracefulShutdown).not.toHaveBeenCalled();
+      expect(dependencies.process.kill).not.toHaveBeenCalled();
+      expect(dependencies.process.exit).not.toHaveBeenCalled();
+    });
+
+    it('still admits a loopback peer when an auth controller exists but no password is set', async () => {
+      const { app, dependencies } = createDevShutdownApp({
+        tunnelAuthController: {
+          classifyRequestScope: () => 'local',
+          requireTunnelSession: vi.fn(),
+        },
+        uiAuthController: {
+          requireAuth: vi.fn((_req, _res, next) => next()),
+        },
+      });
 
       await postDevShutdown(app).expect(200, { ok: true });
 

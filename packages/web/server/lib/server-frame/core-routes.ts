@@ -419,18 +419,10 @@ export const registerServerStatusRoutes = (app: Application, dependencies: Serve
     res.json(body);
   });
 
-  const isLoopbackPeer = (req: Request) => {
-    const remoteAddress = req.socket?.remoteAddress;
-    return Boolean(remoteAddress) && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(remoteAddress);
-  };
-
   const requireShutdownAuth = async (req: Request, res: Response, next: NextFunction) => {
     if (!uiAuthController?.requireAuth) {
-      if (!isLoopbackPeer(req)) {
-        res.status(403).json({ error: 'Shutdown requires authentication or a loopback connection' });
-        return;
-      }
-      return next();
+      res.status(403).json({ error: 'Shutdown requires authentication' });
+      return;
     }
     const requestScope = tunnelAuthController?.classifyRequestScope
       ? tunnelAuthController.classifyRequestScope(req)
@@ -528,7 +520,6 @@ export const registerServerStatusRoutes = (app: Application, dependencies: Serve
       }
     }
   };
-
   app.get('/api/system/info', async (req, res) => {
     const readOmpVersion = (value: string | null | undefined) => (isString(value) && value.trim().length > 0 ? value.trim() : null);
     const resolveOmpVersion = () => {
