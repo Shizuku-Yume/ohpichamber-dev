@@ -34,6 +34,7 @@ import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
 import { bootServerStateStores, installServerStateBootEvents } from '@/stores/serverStateBoot';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
+import { useHostInvalidationSync } from '@/hooks/useHostInvalidationSync';
 import { useSourceControlProviderSync } from '@/hooks/useSourceControlProviderSync';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import type { RuntimeAPIs } from '@/lib/api/types';
@@ -1214,6 +1215,7 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
   React.useEffect(() => installServerStateBootEvents(), []);
   useRouter();
   useSourceControlProviderSync(apis.sourceControl);
+  useHostInvalidationSync();
   useNativeShellIntegration({ native: isNativeMobileApp, connected: isConnected, initialized: isInitialized, onPairing });
   const fontsReady = useFontsReady();
 

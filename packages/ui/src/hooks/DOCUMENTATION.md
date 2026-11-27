@@ -13,6 +13,15 @@ Extension quota cards reload their provider catalog on the Host's
 coalesces repeated reads, rejects stale runtime completions and retains the
 last catalog on failed reads; unrelated control events do not trigger reads.
 
+The Guest-marks and quota-provider invalidation consumers — the listeners for
+a Guest mark written through a guest service, a provider credential, a
+quota-provider lifecycle change — mount through the single composition
+`useHostInvalidationSync` in both app roots (`App` and `MobileApp`), never as
+per-root ad hoc lists. The composition exists because the quota sync shipped
+unmounted for a whole release cycle when every root composed its own list:
+one mount point keeps web, Electron and mobile on the same invalidations, and
+its test renders the composition itself so removing a member fails the suite.
+
 ### Per-turn diff reads
 
 - `useCanonicalTurnDiff` reads the Canonical per-turn diff contract and nothing else: no workspace diff, no transcript tool-history parsing. `ready`, `empty` and `unsupported` are terminal because a finished turn and the append-only journal behind it never change, so they are cached per runtime and turn for the module's life. `failed` contract reads and transport failures are never cached, so opening the surface again, the session settling or pressing retry reads them again.

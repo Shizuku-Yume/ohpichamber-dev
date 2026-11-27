@@ -23,7 +23,7 @@ import { bootServerStateStores, installServerStateBootEvents } from '@/stores/se
 import { useGuestCatalogSync } from '@/hooks/useGuestCatalogSync';
 import { useGuestInstallLinks } from '@/hooks/useGuestInstallLinks';
 import { useProviderSyncs } from '@/hooks/useProviderSyncs';
-import { useGuestMarksSync } from '@/hooks/useGuestMarksSync';
+import { useHostInvalidationSync } from '@/hooks/useHostInvalidationSync';
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
 import { useRelayLimitToast } from '@/hooks/useRelayLimitToast';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
@@ -593,7 +593,7 @@ function App({ apis }: AppProps) {
   useGuestCatalogSync();
   useGuestInstallLinks();
   useProviderSyncs(apis.sourceControl);
-  useGuestMarksSync();
+  useHostInvalidationSync();
   useRoutingSync();
   useEnterprisePolicySync();
   // Desktop windows on a relay host; the phone has its own handling in MobileApp.
