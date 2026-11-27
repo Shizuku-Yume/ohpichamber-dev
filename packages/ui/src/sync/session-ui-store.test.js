@@ -339,7 +339,9 @@ describe('worker-owned slash expansion', () => {
     expect(result).toBe('prompt');
     expect(skillSpy).not.toHaveBeenCalled();
     expect(runCalls).toEqual([{
-      sessionId: 'session-a', commandId: undefined,
+      // session-actions.sendMessage mints the correlation id per logical send
+      // (it is the idempotency key); the exact UUID is opaque to this test.
+      sessionId: 'session-a', commandId: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
       request: {
         input: { text: '/next do the thing', attachments: [], context: [{ kind: 'instruction', text: 'New instructions' }] },
         options: { providerId: 'provider-a', modelId: 'model-a', agentId: null, variant: null, reasoningEffort: null },
