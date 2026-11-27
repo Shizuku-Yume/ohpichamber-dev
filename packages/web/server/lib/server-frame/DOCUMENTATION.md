@@ -14,20 +14,25 @@ This module owns the frame around the feature runtimes: CLI options and the dire
 
 ## Decisions
 
-### Why shutdown routes bind the same auth as the `/api` gate plus a loopback floor
+### Why shutdown routes bind the same auth as the `/api` gate and fail closed without it
 
 `registerServerStatusRoutes` runs before the `/api` auth gate is mounted, so
 `POST /api/system/shutdown` and `POST /api/system/dev-shutdown` cannot rely on
 middleware ordering; each invokes `requireShutdownAuth` inside its own handler
 and only answers `{ ok: true }` after it passes. A tunnel-scoped request
 answers to the tunnel session, everything else to the UI session or client
-bearer token. When no auth controller is configured the control passes through,
-so the socket peer itself becomes the floor: a non-loopback peer is refused,
-because an unauthenticated kill of the host process group must never be
-reachable from the network. The dev shutdown keeps its opt-in environment flag
-and same-origin check ahead of the auth, and the peer check never trusts
-forwarding headers — a reverse proxy or relay that terminates elsewhere
-terminates on a non-loopback socket and is refused unless it authenticates.
+bearer token. When no auth controller is configured the routes fail closed and
+refuse every peer with 403, loopback included: production always wires the
+controllers, so a missing controller is a wiring defect, and an unauthenticated
+kill of the host process group must never be reachable. The passwordless
+loopback case still passes because a controller exists then — `createUiAuth` is
+always constructed at bootstrap, and with no password configured its
+`requireAuth` admits the request. The dev shutdown keeps its opt-in environment
+flag and same-origin check ahead of the auth. No socket-peer carve-out remains
+and forwarding headers never play a role: admission is decided by credentials
+alone, so a reverse proxy or relay that terminates elsewhere reaches the routes
+only when the caller carries a valid tunnel session, UI session, or client
+bearer token.
 
 ### Why static assets and service workers use different cache lifetimes
 

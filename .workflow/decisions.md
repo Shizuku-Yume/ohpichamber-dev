@@ -35,6 +35,7 @@
 - **Mine:** yes
 - **Revisit when:** the Host gains a unified pre-gate auth mount point, so the per-handler binding can move back into middleware.
 - **Effort:** release-hardening
+- **Superseded in part (2026-11-28):** the loopback-floor carve-out was removed in the security review's SEC-2 fix (`e19f5e15ac`). With no auth controller configured the shutdown routes now fail closed and refuse every peer with 403, loopback included — production always wires the controllers, so a missing controller is a wiring defect and the one-shot kill primitive must stay closed rather than guess. The passwordless loopback case stays served because a controller exists then: `createUiAuth` is always constructed at bootstrap, and with no password configured its `requireAuth` passes the request through. No socket-peer check remains on these routes at all; admission is decided by credentials alone. The rest of the entry stands as decided.
 
 ## 2026-11-27 - One canonical turn is one outer run, not one model step
 
