@@ -64,6 +64,7 @@ describe('useComposerQueueActions queued edit and send-now', () => {
     };
     let attachmentBytes: Map<string, Uint8Array>;
     let queuedAppends: Array<{ content: string; attachments?: AttachedFile[] }>;
+    let expandCalls: number;
     const spies: Array<{ mockRestore: () => void }> = [];
     const spy = <T extends object, K extends keyof T>(obj: T, key: K, impl: T[K]) => {
         // SAFETY: spyOn's implementation parameter is contravariant in the method's own type; the impl is already typed as T[K].
@@ -78,6 +79,14 @@ describe('useComposerQueueActions queued edit and send-now', () => {
         await lastTake;
         for (let index = 0; index < 8; index += 1) await Promise.resolve();
     };
+    // The shell mirror reads its expanded flag live, exactly like the real
+    // shell object the composer wires in; expand() flips it, matching the
+    // shell's flushSync commit.
+    const expandedRef = { current: false };
+    const shell = {
+        get expanded() { return expandedRef.current; },
+        expand: () => { expandCalls += 1; expandedRef.current = true; },
+    };
 
     const editor = {
         getValue: () => draftText,
@@ -86,7 +95,7 @@ describe('useComposerQueueActions queued edit and send-now', () => {
         focus: () => undefined,
     };
 
-    const Harness = ({ sessionPhase }: { sessionPhase: string }) => {
+    const Harness = ({ sessionPhase, mobile = false }: { sessionPhase: string; mobile?: boolean }) => {
         // SAFETY: the edit/send-now paths under test read only these members; the queue-submit paths they do not touch never run.
         const dependencies: Parameters<typeof useComposerQueueActions>[0] = {
             inlineContext: {
@@ -133,7 +142,8 @@ describe('useComposerQueueActions queued edit and send-now', () => {
             } as never,
             props: { scrollToLatest: () => undefined } as never,
             referenceDrafts: { setLinkedReferencesFor: () => undefined, updateLinkedReferencesFor: () => undefined, updateLinkedReferences: () => undefined } as never,
-            preferences: { isMobile: false } as never,
+            preferences: { isMobile: mobile } as never,
+            mobileShell: { mobileShell: shell } as never,
             sessionLifecycle: { sessionPhase } as never,
         };
         actions = useComposerQueueActions(dependencies);
@@ -154,13 +164,13 @@ describe('useComposerQueueActions queued edit and send-now', () => {
         get sourceControl() { return unavailable(); },
     };
 
-    const mount = async (sessionPhase = 'idle') => {
+    const mount = async (sessionPhase = 'idle', mobile = false) => {
         // The composer's own session owns the live attachment slot while it is open.
         useInputStore.getState().selectAttachmentDraft(draftIdentity());
         await act(async () => {
             root.render(
                 <RuntimeAPIContext.Provider value={runtime}>
-                    <Harness sessionPhase={sessionPhase} />
+                    <Harness sessionPhase={sessionPhase} mobile={mobile} />
                 </RuntimeAPIContext.Provider>,
             );
         });
@@ -190,6 +200,8 @@ describe('useComposerQueueActions queued edit and send-now', () => {
         sentMessages = [];
         attachmentBytes = new Map();
         queuedAppends = [];
+        expandCalls = 0;
+        expandedRef.current = false;
         takeResult = { status: 'taken', message: queuedMessage(), draft: takenDraft(queuedMessage()) };
         useInputStore.setState({ attachedFiles: [], attachmentDraftKey: null, attachmentDrafts: new Map() });
         useSessionGoalArmStore.setState({ armed: false, objectiveOverride: null, tokenBudgetOverride: null });
@@ -533,4 +545,46 @@ describe('useComposerQueueActions queued edit and send-now', () => {
         expect(errorToasts).toEqual(['chat.queuedMessage.toast.sendNowFailed']);
         expect(draftText).toBe('fix [note.txt] now');
     });
+    test('a mobile edit take-over expands the collapsed shell exactly once', async () => {
+        await mount('idle', true);
+        await act(async () => {
+            actions!.handleQueuedMessageEditById('q1');
+            await flushAsync();
+        });
+        expect(draftText).toBe('fix [note.txt] now');
+        expect(expandCalls).toBe(1);
+    });
+
+    test('a mobile edit take-over leaves an expanded shell alone', async () => {
+        expandedRef.current = true;
+        await mount('idle', true);
+        await act(async () => {
+            actions!.handleQueuedMessageEditById('q1');
+            await flushAsync();
+        });
+        expect(draftText).toBe('fix [note.txt] now');
+        expect(expandCalls).toBe(0);
+    });
+
+    test('a desktop edit take-over never expands the shell', async () => {
+        await mount();
+        await act(async () => {
+            actions!.handleQueuedMessageEditById('q1');
+            await flushAsync();
+        });
+        expect(draftText).toBe('fix [note.txt] now');
+        expect(expandCalls).toBe(0);
+    });
+
+    test('a refused mobile take never expands the shell', async () => {
+        takeResult = { status: 'refused' };
+        await mount('idle', true);
+        await act(async () => {
+            actions!.handleQueuedMessageEditById('q1');
+            await flushAsync();
+        });
+        expect(draftText).toBe('');
+        expect(expandCalls).toBe(0);
+    });
+
 });

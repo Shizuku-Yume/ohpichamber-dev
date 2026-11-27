@@ -11,6 +11,7 @@ import type { useComposerPreferences } from './useComposerPreferences';
 import type { useComposerMentionAttachments } from './useComposerMentionAttachments';
 import type { useComposerLanguage } from './useComposerLanguage';
 import type { useComposerInlineContext } from './useComposerInlineContext';
+import type { useComposerMobileShell } from './useComposerMobileShell';
 import type { useComposerEditorState } from './useComposerEditorState';
 import type { useComposerDraftText } from './useComposerDraftText';
 import type { useComposerAttachmentWork } from './useComposerAttachmentWork';
@@ -81,13 +82,14 @@ type Dependencies = {
     props: Pick<ChatInputProps, 'scrollToLatest'>;
     referenceDrafts: Pick<ReturnType<typeof useComposerReferenceDrafts>, 'setLinkedReferencesFor' | 'updateLinkedReferencesFor' | 'updateLinkedReferences'>;
     preferences: Pick<ReturnType<typeof useComposerPreferences>, 'isMobile'>;
+    mobileShell: Pick<ReturnType<typeof useComposerMobileShell>, 'mobileShell'>;
     sessionLifecycle: Pick<ReturnType<typeof useComposerSessionLifecycle>, 'sessionPhase'>;
 };
 
 export function useComposerQueueActions({
     inlineContext, attachmentWork, largePasteState, i18n, draftText, editorState, sendHandlers, sendAvailability,
     sessionScope, queueState, language, selection, mentionAttachments, props, referenceDrafts,
-    preferences, sessionLifecycle,
+    preferences, sessionLifecycle, mobileShell: mobileShellState,
 }: Dependencies) {
     const { isMobileCommentOpen, hasDrafts, inlineDraftTarget, consumeDrafts } = inlineContext;
     const { waitForPendingAttachments } = attachmentWork;
@@ -114,6 +116,7 @@ export function useComposerQueueActions({
     const { scrollToLatest } = props;
     const { setLinkedReferencesFor, updateLinkedReferencesFor, updateLinkedReferences } = referenceDrafts;
     const { isMobile } = preferences;
+    const { mobileShell } = mobileShellState;
 
     const { files: runtimeFiles } = useRuntimeAPIs();
     const getSubmitErrorMessage = createComposerSubmitErrorMessage(t);
@@ -447,10 +450,11 @@ export function useComposerQueueActions({
         }
         if (queued.goal) useSessionGoalArmStore.getState().setArmed(true, queued.goal.objective ?? null, false, queued.goal.tokenBudget);
         restoreQueuedContext(queued.context ?? []);
+        if (isMobile && !mobileShell.expanded) mobileShell.expand();
         setTimeout(() => {
             composerRef.current?.focus();
         }, 0);
-    }, [restoreQueuedContext, setMessage, composerRef, messageQueueTarget, chatDraftIdentity]);
+    }, [restoreQueuedContext, setMessage, composerRef, messageQueueTarget, chatDraftIdentity, isMobile, mobileShell]);
 
     const handleQueuedMessageEditById = React.useCallback((messageId: string) => {
         if (!messageQueueTarget) return;

@@ -95,7 +95,9 @@ preferences are inputs to these owners.
   attachment store is never rewritten as a filesystem URL. Restored
   attachments file under the draft identity being edited rather than whichever
   input slot is active when the reads resolve, so navigating mid-restore cannot
-  mix sessions. Empty-composer recall skips scheduled rows, whose task owns
+  mix sessions. On mobile a collapsed shell expands when the restored draft
+  arrives, because the pill keeps the editor unmounted and its focus call
+  would land nowhere. Empty-composer recall skips scheduled rows, whose task owns
   them, exactly as the strip offers no edit for them. Send-now takes the same
   way and sends immediately with the captured selection verbatim — a capture
   without an agent passes `null` (the root selection the Host admits), never

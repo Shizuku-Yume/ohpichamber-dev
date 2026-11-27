@@ -127,7 +127,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         inlineContext, attachmentWork, largePasteState, i18n, draftText, editorState, sendAvailability, sessionScope,
         queueState, language, selection, mentionAttachments, props, referenceDrafts, preferences,
         historySearchState, column, parallelRun, sessionLifecycle, expansion,
-        runtime, draftHistory,
+        runtime, draftHistory, mobileShell,
     });
     const sendActions = useComposerSendActions({
         inlineContext, sendAvailability, sendHandlers: sending, sessionScope, sessionLifecycle,

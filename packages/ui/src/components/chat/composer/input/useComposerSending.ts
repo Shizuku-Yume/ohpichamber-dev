@@ -19,6 +19,7 @@ import type { useComposerDraftHistory } from './useComposerDraftHistory';
 import type { useComposerColumn } from './useComposerColumn';
 import type { useComposerAttachmentWork } from './useComposerAttachmentWork';
 import type { useComposerLargePasteState } from './useComposerLargePasteState';
+import type { useComposerMobileShell } from './useComposerMobileShell';
 import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import type { SubmitOptions, ChatInputProps } from './chatInputProps';
@@ -46,6 +47,7 @@ type Dependencies = {
     sessionLifecycle: Pick<ReturnType<typeof useComposerSessionLifecycle>, 'sessionPhase' | 'autoReviewRunning'>;
     expansion: Pick<ReturnType<typeof useComposerExpansion>, 'setExpandedInput'>;
     runtime: Pick<ReturnType<typeof useComposerRuntime>, 'runtimeTrackers' | 'runtimeFiles'>;
+    mobileShell: Pick<ReturnType<typeof useComposerMobileShell>, 'mobileShell'>;
     draftHistory: Pick<ReturnType<typeof useComposerDraftHistory>, 'handoffDraft' | 'restoreDraft' | 'persistDraftImmediately' | 'messageHistory' | 'migrateDraft'>;
 };
 
