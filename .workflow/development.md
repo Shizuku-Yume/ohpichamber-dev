@@ -67,6 +67,21 @@ task-05. Real isolated Web start plus one billed provider chat turn passed
 with zero console errors across desktop and mobile surfaces. Evidence:
 `/home/shizuku/Project/ohpichamber-omp-artifacts/release-hardening-2026-11-26/task12/`.
 
+W12 rework round 1 reconciles the upstream-drift ledger against the committed
+tree (the first round's green captures were taken pre-commit, while the guard
+reads `git ls-tree HEAD`): the 21 rows naming files W12 deleted are removed,
+and the 28 unexplained fork-differs paths are reconciled — two doc files
+reverted to upstream byte-for-byte, twelve lint-fixed hook files and thirteen
+dead-code-cleaned files kept with rows citing the new decisions
+`2026-11-27 - Correct hook effect dependencies instead of disabling exhaustive-deps`
+and `2026-11-27 - Unreachable upstream leftovers are deleted, not carried byte-for-byte`
+(reverting the dead-code cleanups was probed and rejected: it reintroduces 25
+knip findings), plus task 11's server-frame shutdown-auth documentation citing
+`2026-11-27 - Shutdown routes bind the API gate auth plus a loopback floor`.
+Post-commit receipts: drift `--markers --check`, `bun run check`,
+`bun run type-check` all exit 0 with lint and dead-code still at zero.
+Evidence: `task12/rework1-*.log` beside the round-1 receipts.
+
 W11 exposes OMP 19.1 command and skill discovery on their existing pages and
 creates grouped native prompts through the existing catalog. Command and prompt
 edits preserve unowned native metadata without evolving Capacitor response

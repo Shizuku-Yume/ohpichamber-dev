@@ -1,5 +1,32 @@
 # Decisions
 
+## 2026-11-27 - Correct hook effect dependencies instead of disabling exhaustive-deps
+
+- **Decided:** The release-hardening lint sweep clears every `react-hooks/exhaustive-deps` warning on the upstream-shared diff-view and file-view hooks by reasoning about each effect's trigger — dependency arrays list the refs and setters the callback reads (refs are stable by contract), the file-move bridge the reset effect keys on is converted from a mutable-ref read to real state (`pendingPathMoveTo`), and the file-switch reset settles through a settled-path guard so the effect's behavior is observable and testable. Where upstream carries the same hooks byte-for-byte, the fork keeps these corrections rather than reverting to lint-warning code or disabling the rule.
+- **Instead of:** eslint-disable comments, or reverting to the upstream dependency arrays that re-introduce the 96 warnings.
+- **Because:** an effect that reads a value without depending on it fires on stale data; the maintainer's release rule forbids both rule disables and new lint warnings, so the only clean resolution is the correction itself — and once the correction exists, the files genuinely differ from upstream and the ledger records the difference here.
+- **Mine:** yes
+- **Revisit when:** upstream fixes the same dependency arrays, so the fork files can rejoin upstream byte-for-byte.
+- **Effort:** release-hardening
+
+## 2026-11-27 - Unreachable upstream leftovers are deleted, not carried byte-for-byte
+
+- **Decided:** The release-hardening dead-code sweep deletes upstream-carried exports, types and helpers that no caller in the fork reaches — knip confirmed zero references across source, tests, dynamic imports, extension entry points and scripts — rather than keeping the files byte-identical to upstream. Most are upstream leftovers of surfaces the fork's merge resolutions already retired (the shared-page card and its group/recipient reads, the useUIStore facade re-exports that fork callers take from their owning modules, the mobile changes-navigation hook whose logic the fork's canonical-turn surface rewrote inline, the folder-filing helper whose write moved into `session-ui-store`). Where a type or helper is used only inside its own file, the export keyword is dropped instead. A later upstream sync re-applies the same rule: adopt upstream's version, then delete what nothing reaches.
+- **Instead of:** reverting the files to the upstream blobs, which reintroduces 25 dead-code findings the maintainer's zero-dead-code release gate forbids, or widening knip ignores to hide them.
+- **Because:** dead exports are the maintenance cost the release-hardening effort exists to remove (2026-11-26 - Clear every solvable technical debt before the 1.0 release): every upstream sync would re-review code no caller can reach, and the fork's zero-finding gate cannot hold while they exist.
+- **Mine:** yes
+- **Revisit when:** a regression task restores one of the retired surfaces (the shared-page card, folder filing outside session creation); the restoration re-adds the caller and the export together, and the ledger row is removed when upstream and the fork agree again.
+- **Effort:** release-hardening
+
+## 2026-11-27 - Shutdown routes bind the API gate auth plus a loopback floor
+
+- **Decided:** `POST /api/system/shutdown` and `POST /api/system/dev-shutdown` each invoke `requireShutdownAuth` inside their own handler, because `registerServerStatusRoutes` mounts before the `/api` auth middleware and cannot rely on ordering. A tunnel-scoped request answers to the tunnel session, everything else to the UI session or client bearer token. When no auth controller is configured, a non-loopback socket peer is refused — an unauthenticated kill of the host process group must never be reachable from the network — and the peer check never trusts forwarding headers. The dev shutdown keeps its opt-in environment flag and same-origin check ahead of the auth.
+- **Instead of:** the inherited pairing of an opt-in environment flag with a same-origin header comparison, which compares client-controlled `Origin` with client-controlled `Host` and is not an authorization control.
+- **Because:** with the flag set, the unauthenticated route could kill the server process group and its parent, plus arbitrary loopback listeners, from any remote caller that matches the two headers.
+- **Mine:** yes
+- **Revisit when:** the Host gains a unified pre-gate auth mount point, so the per-handler binding can move back into middleware.
+- **Effort:** release-hardening
+
 ## 2026-11-27 - One canonical turn is one outer run, not one model step
 
 - **Decided:** The worker projection keeps the canonical turn open across every native `turn_end` of the agent loop and settles it only at the run's own terminal settlement (`agent_end` or its fail/cancel path). A mid-run user message (steering, follow-up) joins the open turn instead of opening another. Cold reads group the transcript by the same rule, and the turn window is derived as the union of its run's message times on both paths.
